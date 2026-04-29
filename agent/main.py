@@ -2,9 +2,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional, List, Dict
 # 导入代理逻辑和提供者工厂
 from agent import run_agent, get_market_rankings
 from services.provider_factory import provider_factory
+from services.langchain_agent import get_crypto_agent
 import os
 
 # 创建FastAPI应用实例
@@ -104,6 +106,63 @@ def health_check():
         服务状态
     """
     return {"status": "ok", "service": "OKX交易分析API", "version": "1.0.0"}
+
+
+class ChatMessage(BaseModel):
+    """
+    聊天消息模型
+    """
+    role: str  # "user" 或 "assistant"
+    content: str
+
+
+class ChatQuery(BaseModel):
+    """
+    对话查询模型
+    """
+    query: str
+    chat_history: Optional[List[ChatMessage]] = None
+
+
+@app.post("/api/v1/chat", summary="LangChain AI对话")
+def chat_with_agent(cq: ChatQuery):
+    """
+    使用LangChain Agent进行自然语言对话
+    
+    请求体:
+        query: 用户查询文本
+        chat_history: 可选的历史对话记录
+    
+    返回:
+        AI生成的分析结果
+    """
+    try:
+        agent = get_crypto_agent()
+        history = None
+        
+        if cq.chat_history:
+            history = [{"role": msg.role, "content": msg.content} for msg in cq.chat_history]
+        
+        result = agent.run(cq.query, history)
+        return {"success": True, "response": result}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/v1/chat/clear", summary="清除对话记忆")
+def clear_chat_memory():
+    """
+    清除Agent的对话记忆
+    
+    返回:
+        操作状态
+    """
+    try:
+        agent = get_crypto_agent()
+        agent.clear_memory()
+        return {"success": True, "message": "对话记忆已清除"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 if __name__ == "__main__":
