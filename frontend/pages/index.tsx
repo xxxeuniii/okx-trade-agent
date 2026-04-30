@@ -2,7 +2,27 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import SearchBar from '../components/SearchBar';
 import SignalCard from '../components/SignalCard';
 import RiskManagementCard from '../components/RiskManagementCard';
+import SentimentCard from '../components/SentimentCard';
 import { getSignal, SignalResponse } from '../services/api';
+
+// 情绪数据接口
+interface SentimentData {
+  longShortRatio: number;
+  fundingRate: number;
+  fearGreedIndex: number;
+  fearGreedLabel: string;
+}
+
+// 获取恐慌贪婪指数标签
+const getFearGreedLabel = (index: number): string => {
+  if (index <= 10) return '极端恐慌';
+  if (index <= 25) return '恐慌';
+  if (index <= 40) return '偏空';
+  if (index <= 55) return '中性';
+  if (index <= 70) return '偏多';
+  if (index <= 85) return '贪婪';
+  return '极端贪婪';
+};
 
 // 支持的时间周期 - 完整列表
 const TIMEFRAMES = [
@@ -31,6 +51,7 @@ const QUICK_TIMEFRAMES = ['1m', '5m', '15m', '1H', '4H', '1D'];
 
 export default function Home() {
   const [signal, setSignal] = useState<SignalResponse | null>(null);
+  const [sentiment, setSentiment] = useState<SentimentData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isRealtime, setIsRealtime] = useState(false);
@@ -112,6 +133,21 @@ export default function Home() {
     };
   }, [signal?.symbol, isRealtime]);
 
+  // 获取模拟情绪数据
+  const fetchSentimentData = (): SentimentData => {
+    // 生成模拟数据
+    const longShortRatio = Math.round((Math.random() * 1.5 + 0.5) * 100) / 100;
+    const fundingRate = Math.round((Math.random() * 0.08 - 0.02) * 10000) / 100;
+    const fearGreedIndex = Math.floor(Math.random() * 100);
+    
+    return {
+      longShortRatio,
+      fundingRate,
+      fearGreedIndex,
+      fearGreedLabel: getFearGreedLabel(fearGreedIndex)
+    };
+  };
+
   const handleSearch = async (symbol: string) => {
     setLoading(true);
     setError('');
@@ -124,6 +160,7 @@ export default function Home() {
       }
       
       setSignal(response);
+      setSentiment(fetchSentimentData());
       setIsRealtime(true);
     } catch (err) {
       console.log('API调用失败:', err);
@@ -288,6 +325,10 @@ export default function Home() {
                       <span>|</span>
                       <span>当前周期: {TIMEFRAMES.find(t => t.value === timeframe)?.label}</span>
                     </div>
+                    
+                    {/* 市场情绪指标卡片 */}
+                    {sentiment && <SentimentCard data={sentiment} />}
+                    
                     <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] 2xl:grid-cols-[minmax(0,1fr)_460px] gap-6 2xl:gap-8 items-start">
                       <SignalCard data={signal} />
                       {signal.risk && (
