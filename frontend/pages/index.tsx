@@ -5,7 +5,7 @@ import RiskManagementCard from '../components/RiskManagementCard';
 import SentimentCard from '../components/SentimentCard';
 import MultiTimeframeTrendPanel from '../components/MultiTimeframeTrendPanel';
 import FloatingAssistant from '../components/FloatingAssistant';
-import { getSignal, SignalResponse, getSentimentData, SentimentData } from '../services/api';
+import { getSignal, SignalResponse, getSentimentData, SentimentData, getMultiTimeframe, MultiTimeframeResponse } from '../services/api';
 
 // 获取恐慌贪婪指数标签
 const getFearGreedLabel = (index: number): string => {
@@ -52,6 +52,7 @@ export default function Home() {
   const [signal, setSignal] = useState<SignalResponse | null>(null);
   const [sentiment, setSentiment] = useState<SentimentData | null>(null);
   const [multiTimeframeSignals, setMultiTimeframeSignals] = useState<MultiTimeframeSignal>({});
+  const [multiTimeframeData, setMultiTimeframeData] = useState<MultiTimeframeResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isRealtime, setIsRealtime] = useState(false);
@@ -203,10 +204,11 @@ export default function Home() {
         setTimeout(() => reject(new Error('请求超时')), 15000)
       );
 
-      const [response, sentimentData] = await Promise.race<[SignalResponse, SentimentData]>([
+      const [response, sentimentData, timeframeData] = await Promise.race<[SignalResponse, SentimentData, MultiTimeframeResponse]>([
         Promise.all([
           getSignal(symbol, timeframe),
-          fetchSentimentData(symbol)
+          fetchSentimentData(symbol),
+          getMultiTimeframe(symbol)
         ]),
         timeoutPromise
       ]);
@@ -225,6 +227,7 @@ export default function Home() {
       setSignal(response);
       setSentiment(sentimentData);
       setMultiTimeframeSignals(generateMultiTimeframeSignals(response.signal));
+      setMultiTimeframeData(timeframeData);
       setLastUpdateTime(new Date());
       setIsRealtime(true);
     } catch (err) {
@@ -405,13 +408,17 @@ export default function Home() {
                         <SignalCard data={signal} />
                         {/* 多周期趋势面板 */}
                         <MultiTimeframeTrendPanel 
-                          data={[
+                          data={multiTimeframeData?.timeframes.map(t => ({
+                            timeframe: t.timeframe === '1H' ? '1小时' : t.timeframe === '4H' ? '4小时' : t.timeframe === '1D' ? '日线' : t.timeframe,
+                            trend: t.trend,
+                            strength: t.strength
+                          })) || [
                             { timeframe: '1小时', trend: signal.signal === 'BUY' ? 'bullish' : signal.signal === 'SELL' ? 'bearish' : 'sideways', strength: Math.round(signal.confidence * 100) },
                             { timeframe: '4小时', trend: signal.signal === 'BUY' ? 'bullish' : signal.signal === 'SELL' ? 'bearish' : 'sideways', strength: Math.round(signal.confidence * 85) },
                             { timeframe: '日线', trend: signal.signal === 'BUY' ? 'bullish' : signal.signal === 'SELL' ? 'bearish' : 'sideways', strength: Math.round(signal.confidence * 70) },
                           ]}
-                          confidenceImpact={Math.round(signal.confidence * 20)}
-                          isAligned={signal.confidence >= 0.6}
+                          confidenceImpact={multiTimeframeData?.confidence_impact || Math.round(signal.confidence * 20)}
+                          isAligned={multiTimeframeData?.is_aligned || signal.confidence >= 0.6}
                         />
                       </div>
                       <div className="space-y-6">

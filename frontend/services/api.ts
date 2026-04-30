@@ -175,3 +175,34 @@ export async function askAgentStream(input: string, chatHistory: Array<{ role: s
 export async function clearChatMemory(): Promise<{ success: boolean; message: string }> {
   return axios.post('/api/v1/chat/clear');
 }
+
+/**
+ * 多周期趋势数据接口定义
+ */
+export interface MultiTimeframeData {
+  timeframe: string;
+  trend: 'bullish' | 'bearish' | 'sideways';
+  strength: number;
+  signal: string;
+  confidence: number;
+}
+
+/**
+ * 多周期趋势响应接口
+ */
+export interface MultiTimeframeResponse {
+  symbol: string;
+  timeframes: MultiTimeframeData[];
+  is_aligned: boolean;
+  confidence_impact: number;
+}
+
+/**
+ * 获取多周期趋势分析数据
+ * 
+ * @param symbol - 加密货币代码，默认 BTC
+ * @returns Promise<MultiTimeframeResponse> - 多周期趋势数据
+ */
+export async function getMultiTimeframe(symbol: string = 'BTC'): Promise<MultiTimeframeResponse> {
+  return axios.get('/api/v1/multi-timeframe', { params: { symbol } });
+}
