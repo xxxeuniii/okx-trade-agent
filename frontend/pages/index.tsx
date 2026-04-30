@@ -36,6 +36,7 @@ export default function Home() {
   const [isRealtime, setIsRealtime] = useState(false);
   const [timeframe, setTimeframe] = useState('1H');
   const [showTimeframeDropdown, setShowTimeframeDropdown] = useState(false);
+  const [activeTab, setActiveTab] = useState<'analysis' | 'chat' | 'backtest'>('analysis');
   const wsRef = useRef<WebSocket | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -194,6 +195,49 @@ export default function Home() {
           <SearchBar onSearch={handleSearch} loading={loading} />
         </section>
 
+        {/* 标签切换 */}
+        <div className="flex justify-center gap-3 mb-6">
+          <button
+            onClick={() => setActiveTab('analysis')}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
+              activeTab === 'analysis'
+                ? 'bg-accent-blue text-white shadow-md shadow-accent-blue/30'
+                : 'bg-white text-light-600 hover:bg-light-50 border border-light-200 hover:border-accent-blue/30'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            交易分析
+          </button>
+          <button
+            onClick={() => setActiveTab('chat')}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
+              activeTab === 'chat'
+                ? 'bg-accent-blue text-white shadow-md shadow-accent-blue/30'
+                : 'bg-white text-light-600 hover:bg-light-50 border border-light-200 hover:border-accent-blue/30'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            AI 对话
+          </button>
+          <button
+            onClick={() => setActiveTab('backtest')}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
+              activeTab === 'backtest'
+                ? 'bg-accent-blue text-white shadow-md shadow-accent-blue/30'
+                : 'bg-white text-light-600 hover:bg-light-50 border border-light-200 hover:border-accent-blue/30'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+            策略回测
+          </button>
+        </div>
+
         {loading && (
           <div className="flex flex-col items-center justify-center py-16">
             <div className="relative">
@@ -212,116 +256,246 @@ export default function Home() {
 
         {!loading && (
           <section>
-            {signal ? (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center flex-wrap gap-4">
-                  <div className="flex items-center gap-3">
-                    {/* 快捷周期按钮 */}
-                    <div className="flex items-center gap-1.5">
-                      {QUICK_TIMEFRAMES.map((tfValue) => {
-                        const tf = TIMEFRAMES.find(t => t.value === tfValue);
-                        return tf ? (
-                          <button
-                            key={tf.value}
-                            onClick={() => handleTimeframeChange(tf.value)}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                              timeframe === tf.value
-                                ? 'bg-accent-blue text-white shadow-md shadow-accent-blue/30'
-                                : 'bg-light-100 text-light-600 hover:bg-light-200'
-                            }`}
-                          >
-                            {tf.label}
-                          </button>
-                        ) : null;
-                      })}
-                    </div>
-                    {/* 分隔线 */}
-                    <div className="w-px h-6 bg-light-200" />
-                    {/* 下拉按钮 - 单独显示 */}
-                    <div className="relative">
-                      <button
-                        onClick={() => setShowTimeframeDropdown(!showTimeframeDropdown)}
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-light-100 text-light-600 hover:bg-light-200 ${
-                          !QUICK_TIMEFRAMES.includes(timeframe) && 'ring-1 ring-accent-blue ring-offset-1'
-                        }`}
-                      >
-                        <span>{TIMEFRAMES.find(t => t.value === timeframe)?.label || '周期'}</span>
-                        <svg className={`w-4 h-4 transition-transform duration-200 ${showTimeframeDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-                      {/* 下拉网格 */}
-                      {showTimeframeDropdown && (
-                        <div ref={dropdownRef} className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-light-200 p-4 z-10 min-w-[280px]">
-                          <div className="grid grid-cols-5 gap-2">
-                            {TIMEFRAMES.map((tf) => (
+            {/* 交易分析标签 */}
+            {activeTab === 'analysis' && (
+              <>
+                {signal ? (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center flex-wrap gap-4">
+                      <div className="flex items-center gap-3">
+                        {/* 快捷周期按钮 */}
+                        <div className="flex items-center gap-1.5">
+                          {QUICK_TIMEFRAMES.map((tfValue) => {
+                            const tf = TIMEFRAMES.find(t => t.value === tfValue);
+                            return tf ? (
                               <button
                                 key={tf.value}
-                                onClick={() => {
-                                  handleTimeframeChange(tf.value);
-                                  setShowTimeframeDropdown(false);
-                                }}
-                                className={`w-[52px] h-[44px] rounded-lg text-xs font-medium flex items-center justify-center transition-all duration-150 ${
+                                onClick={() => handleTimeframeChange(tf.value)}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                                   timeframe === tf.value
                                     ? 'bg-accent-blue text-white shadow-md shadow-accent-blue/30'
-                                    : 'text-light-600 hover:bg-light-50'
+                                    : 'bg-light-100 text-light-600 hover:bg-light-200'
                                 }`}
                               >
                                 {tf.label}
                               </button>
-                            ))}
-                          </div>
+                            ) : null;
+                          })}
                         </div>
+                        {/* 分隔线 */}
+                        <div className="w-px h-6 bg-light-200" />
+                        {/* 下拉按钮 - 单独显示 */}
+                        <div className="relative">
+                          <button
+                            onClick={() => setShowTimeframeDropdown(!showTimeframeDropdown)}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-light-100 text-light-600 hover:bg-light-200 ${
+                              !QUICK_TIMEFRAMES.includes(timeframe) && 'ring-1 ring-accent-blue ring-offset-1'
+                            }`}
+                          >
+                            <span>{TIMEFRAMES.find(t => t.value === timeframe)?.label || '周期'}</span>
+                            <svg className={`w-4 h-4 transition-transform duration-200 ${showTimeframeDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                          {/* 下拉网格 */}
+                          {showTimeframeDropdown && (
+                            <div ref={dropdownRef} className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-light-200 p-4 z-10 min-w-[280px]">
+                              <div className="grid grid-cols-5 gap-2">
+                                {TIMEFRAMES.map((tf) => (
+                                  <button
+                                    key={tf.value}
+                                    onClick={() => {
+                                      handleTimeframeChange(tf.value);
+                                      setShowTimeframeDropdown(false);
+                                    }}
+                                    className={`w-[52px] h-[44px] rounded-lg text-xs font-medium flex items-center justify-center transition-all duration-150 ${
+                                      timeframe === tf.value
+                                        ? 'bg-accent-blue text-white shadow-md shadow-accent-blue/30'
+                                        : 'text-light-600 hover:bg-light-50'
+                                    }`}
+                                  >
+                                    {tf.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={toggleRealtime}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${
+                          isRealtime 
+                            ? 'bg-accent-green/10 text-accent-green border border-accent-green/30' 
+                            : 'bg-light-100 text-light-500 border border-light-200 hover:border-accent-blue/30'
+                        }`}
+                      >
+                        {isRealtime ? '⏸ 暂停实时更新' : '▶ 开启实时更新'}
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-light-400">
+                      <span>📊 数据来源: OKX现货市场 (BTC-USDT)</span>
+                      <span>|</span>
+                      <span>当前周期: {TIMEFRAMES.find(t => t.value === timeframe)?.label}</span>
+                    </div>
+                    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] 2xl:grid-cols-[minmax(0,1fr)_460px] gap-6 2xl:gap-8 items-start">
+                      <SignalCard data={signal} />
+                      {signal.risk && (
+                        <RiskManagementCard risk={signal.risk} signal={signal.signal} />
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={toggleRealtime}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${
-                      isRealtime 
-                        ? 'bg-accent-green/10 text-accent-green border border-accent-green/30' 
-                        : 'bg-light-100 text-light-500 border border-light-200 hover:border-accent-blue/30'
-                    }`}
-                  >
-                    {isRealtime ? '⏸ 暂停实时更新' : '▶ 开启实时更新'}
-                  </button>
-                </div>
-                <div className="flex items-center gap-4 text-xs text-light-400">
-                  <span>📊 数据来源: OKX现货市场 (BTC-USDT)</span>
-                  <span>|</span>
-                  <span>当前周期: {TIMEFRAMES.find(t => t.value === timeframe)?.label}</span>
-                </div>
-                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] 2xl:grid-cols-[minmax(0,1fr)_460px] gap-6 2xl:gap-8 items-start">
-                  <SignalCard data={signal} />
-                  {signal.risk && (
-                    <RiskManagementCard risk={signal.risk} signal={signal.signal} />
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="glass-card rounded-2xl p-12 text-center">
-                <div className="relative inline-block mb-6">
-                  <div className="absolute inset-0 bg-gradient-to-br from-accent-blue/10 to-accent-green/10 rounded-full blur-2xl" />
-                  <div className="relative w-24 h-24 bg-light-100 rounded-full flex items-center justify-center border border-light-200">
-                    <svg className="w-12 h-12 text-accent-blue/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
+                ) : (
+                  <div className="glass-card rounded-2xl p-12 text-center">
+                    <div className="relative inline-block mb-6">
+                      <div className="absolute inset-0 bg-gradient-to-br from-accent-blue/10 to-accent-green/10 rounded-full blur-2xl" />
+                      <div className="relative w-24 h-24 bg-light-100 rounded-full flex items-center justify-center border border-light-200">
+                        <svg className="w-12 h-12 text-accent-blue/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                    </div>
+                    <h3 className="text-2xl font-bold text-light-800 mb-3">开始分析您的加密货币</h3>
+                    <p className="text-light-400 max-w-md mx-auto mb-8">
+                      在上方输入框中输入加密货币代码，或点击下方快捷按钮，获取AI驱动的交易信号和市场分析。
+                    </p>
+                    <div className="flex flex-wrap justify-center gap-3">
+                      {['BTC', 'ETH', 'SOL', 'AVAX', 'MATIC', 'DOGE', 'XRP', 'ADA'].map((symbol) => (
+                        <button
+                          key={symbol}
+                          onClick={() => handleSearch(symbol)}
+                          className="px-5 py-3 bg-gradient-to-br from-light-50 to-white hover:from-accent-blue/5 hover:to-accent-green/5 border border-light-200 hover:border-accent-blue/30 rounded-xl text-sm font-semibold text-light-700 transition-all duration-300 hover:scale-105"
+                        >
+                          {symbol}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* AI对话标签 */}
+            {activeTab === 'chat' && (
+              <div className="max-w-4xl mx-auto">
+                <div className="bg-white rounded-2xl shadow-lg border border-light-200 overflow-hidden">
+                  <div className="bg-gradient-to-r from-accent-blue to-accent-green px-6 py-4">
+                    <h3 className="text-white font-semibold">AI 交易助手</h3>
+                    <p className="text-white/70 text-sm">用自然语言查询加密货币信息</p>
+                  </div>
+                  <div className="p-4">
+                    <div className="bg-light-50 rounded-xl p-8 text-center">
+                      <div className="w-16 h-16 bg-accent-blue/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                      </div>
+                      <h4 className="text-lg font-semibold text-light-800 mb-2">开始对话</h4>
+                      <p className="text-light-400 text-sm">输入您的问题，例如：</p>
+                      <div className="flex flex-wrap justify-center gap-2 mt-4">
+                        {['BTC现在多少钱？', '分析ETH的走势', '推荐一个币种'].map((example) => (
+                          <button
+                            key={example}
+                            className="px-4 py-2 bg-white border border-light-200 rounded-lg text-sm text-light-600 hover:border-accent-blue/30 hover:text-accent-blue transition-all"
+                          >
+                            {example}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* 输入框 */}
+                    <div className="mt-4 flex gap-3">
+                      <input
+                        type="text"
+                        placeholder="输入您的问题..."
+                        className="flex-1 px-4 py-3 bg-light-50 border border-light-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-blue/30 focus:border-accent-blue"
+                      />
+                      <button className="px-6 py-3 bg-accent-blue hover:bg-accent-blue/90 text-white font-semibold rounded-xl transition-all">
+                        发送
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <h3 className="text-2xl font-bold text-light-800 mb-3">开始分析您的加密货币</h3>
-                <p className="text-light-400 max-w-md mx-auto mb-8">
-                  在上方输入框中输入加密货币代码，或点击下方快捷按钮，获取AI驱动的交易信号和市场分析。
-                </p>
-                <div className="flex flex-wrap justify-center gap-3">
-                  {['BTC', 'ETH', 'SOL', 'AVAX', 'MATIC', 'DOGE', 'XRP', 'ADA'].map((symbol) => (
-                    <button
-                      key={symbol}
-                      onClick={() => handleSearch(symbol)}
-                      className="px-5 py-3 bg-gradient-to-br from-light-50 to-white hover:from-accent-blue/5 hover:to-accent-green/5 border border-light-200 hover:border-accent-blue/30 rounded-xl text-sm font-semibold text-light-700 transition-all duration-300 hover:scale-105"
-                    >
-                      {symbol}
+              </div>
+            )}
+
+            {/* 策略回测标签 */}
+            {activeTab === 'backtest' && (
+              <div className="max-w-4xl mx-auto">
+                <div className="bg-white rounded-2xl shadow-lg border border-light-200 overflow-hidden">
+                  <div className="bg-gradient-to-r from-accent-green to-accent-blue px-6 py-4">
+                    <h3 className="text-white font-semibold">策略回测</h3>
+                    <p className="text-white/70 text-sm">测试交易策略在历史数据上的表现</p>
+                  </div>
+                  <div className="p-6">
+                    {/* 回测参数设置 */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                      <div>
+                        <label className="block text-sm font-medium text-light-700 mb-2">选择币种</label>
+                        <select className="w-full px-4 py-3 bg-light-50 border border-light-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-green/30 focus:border-accent-green">
+                          <option value="BTC">BTC</option>
+                          <option value="ETH">ETH</option>
+                          <option value="SOL">SOL</option>
+                          <option value="AVAX">AVAX</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-light-700 mb-2">时间周期</label>
+                        <select className="w-full px-4 py-3 bg-light-50 border border-light-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-green/30 focus:border-accent-green">
+                          <option value="1H">1小时</option>
+                          <option value="4H">4小时</option>
+                          <option value="1D">1日</option>
+                          <option value="1W">1周</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-light-700 mb-2">初始资金 (USDT)</label>
+                        <input
+                          type="number"
+                          defaultValue={10000}
+                          className="w-full px-4 py-3 bg-light-50 border border-light-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-green/30 focus:border-accent-green"
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* 开始回测按钮 */}
+                    <button className="w-full py-4 bg-gradient-to-r from-accent-green to-accent-blue hover:opacity-90 text-white font-semibold rounded-xl transition-all shadow-lg shadow-accent-green/30">
+                      🚀 开始回测
                     </button>
-                  ))}
+
+                    {/* 回测结果展示区域 */}
+                    <div className="mt-6 p-6 bg-light-50 rounded-xl">
+                      <div className="text-center">
+                        <div className="w-20 h-20 bg-accent-green/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <svg className="w-10 h-10 text-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                          </svg>
+                        </div>
+                        <h4 className="text-lg font-semibold text-light-800 mb-2">选择参数后开始回测</h4>
+                        <p className="text-light-400 text-sm">回测将使用AI策略在历史数据上模拟交易，评估策略表现</p>
+                      </div>
+                    </div>
+
+                    {/* 回测指标预览 */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                      <div className="bg-light-50 rounded-xl p-4 text-center">
+                        <div className="text-2xl font-bold text-accent-green mb-1">-</div>
+                        <div className="text-sm text-light-400">总收益率</div>
+                      </div>
+                      <div className="bg-light-50 rounded-xl p-4 text-center">
+                        <div className="text-2xl font-bold text-accent-blue mb-1">-</div>
+                        <div className="text-sm text-light-400">胜率</div>
+                      </div>
+                      <div className="bg-light-50 rounded-xl p-4 text-center">
+                        <div className="text-2xl font-bold text-accent-red mb-1">-</div>
+                        <div className="text-sm text-light-400">最大回撤</div>
+                      </div>
+                      <div className="bg-light-50 rounded-xl p-4 text-center">
+                        <div className="text-2xl font-bold text-light-700 mb-1">-</div>
+                        <div className="text-sm text-light-400">交易次数</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
