@@ -56,6 +56,7 @@ export default function FloatingAssistant() {
       const deltaX = e.clientX - startPosRef.current.x;
       const deltaY = e.clientY - startPosRef.current.y;
 
+      // 从左上角拖拽，向右下拖动增加尺寸
       const newWidth = Math.min(Math.max(startDimRef.current.width + deltaX, 320), 600);
       const newHeight = Math.min(Math.max(startDimRef.current.height + deltaY, 400), 700);
 
@@ -332,11 +333,12 @@ export default function FloatingAssistant() {
 
             {/* 调整大小手柄 */}
             <div
-              className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize flex items-center justify-center bg-accent-blue/10 rounded-bl-lg"
+              className="absolute top-0 left-0 w-6 h-6 cursor-nwse-resize flex items-center justify-center bg-accent-blue/10 rounded-br-lg hover:bg-accent-blue/20 transition-colors"
               onMouseDown={handleResizeStart}
+              title="拖拽调整大小"
             >
               <svg className="w-4 h-4 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
               </svg>
             </div>
           </div>
