@@ -300,14 +300,11 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="glass-card rounded-2xl p-12 text-center">
-                    <div className="relative inline-block mb-6">
-                      <div className="absolute inset-0 bg-gradient-to-br from-accent-blue/10 to-accent-green/10 rounded-full blur-2xl" />
-                      <div className="relative w-24 h-24 bg-light-100 rounded-full flex items-center justify-center border border-light-200">
+                      <div className="w-24 h-24 bg-light-100 rounded-full flex items-center justify-center border border-light-200 mx-auto mb-6">
                         <svg className="w-12 h-12 text-accent-blue/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                       </div>
-                    </div>
                     <h3 className="text-2xl font-bold text-light-800 mb-3">开始分析您的加密货币</h3>
                     <p className="text-light-400 max-w-md mx-auto mb-8">
                       在上方输入框中输入加密货币代码，或点击下方快捷按钮，获取AI驱动的交易信号和市场分析。
