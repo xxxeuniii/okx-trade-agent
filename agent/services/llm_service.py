@@ -74,6 +74,134 @@ class LLMService:
             print(f"LLM服务异常: {e}")
             return self._get_fallback_signal(indicators)
     
+    def generate_risk_management(self, price_data: dict, signal_data: dict) -> Optional[dict]:
+        """
+        调用大模型生成风险控制方案。
+        风控不使用本地规则兜底；模型不可用或返回异常时返回 None。
+        """
+        if not self.client:
+            print("AI风控不可用：LLM客户端未初始化")
+            return None
+
+        try:
+            prompt = self._build_risk_prompt(price_data, signal_data)
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=2048,
+                temperature=0.4,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            )
+            return self._parse_risk_response(response)
+        except APIError as e:
+            print(f"AI风控模型调用失败: {e}")
+            return None
+        except Exception as e:
+            print(f"AI风控服务异常: {e}")
+            return None
+
+    def _build_risk_prompt(self, price_data: dict, signal_data: dict) -> str:
+        indicators = price_data.get("indicators", {}) or {}
+
+        def fmt(value, digits=2):
+            if value is None:
+                return "N/A"
+            try:
+                return f"{float(value):.{digits}f}"
+            except (TypeError, ValueError):
+                return "N/A"
+
+        prompt = f"""
+你是一位专业的加密货币交易风控分析师。请只基于给定市场数据、技术指标和AI交易信号，生成风险控制方案。
+
+重要要求：
+1. 风控结论必须由你综合判断，不要套用固定模板。
+2. 如果当前信号不适合开仓，可以将 positionSize 设为“观望”，但仍需要给出观察用的关键价格边界。
+3. 止损、止盈、仓位、风险评分需要结合支撑阻力、波动率、置信度和信号方向综合判断。
+4. 结果仅用于风险辅助，不要承诺收益。
+5. 只输出JSON，不要输出Markdown或解释文字。
+
+## 市场数据
+- 当前价格: {fmt(price_data.get("price"), 4)}
+- 24小时涨跌幅: {fmt(price_data.get("changePercent24h"), 2)}%
+
+## AI交易信号
+- signal: {signal_data.get("signal", "NEUTRAL")}
+- confidence: {fmt(signal_data.get("confidence"), 2)}
+- reason: {signal_data.get("reason", [])}
+
+## 技术指标
+- RSI(14): {fmt(indicators.get("rsi"), 2)}
+- MACD: {fmt(indicators.get("macd"), 4)}
+- MACD signal: {fmt(indicators.get("macd_signal"), 4)}
+- SMA 7: {fmt(indicators.get("sma_7"), 4)}
+- SMA 20: {fmt(indicators.get("sma_20"), 4)}
+- SMA 50: {fmt(indicators.get("sma_50"), 4)}
+- Bollinger upper: {fmt(indicators.get("bollinger_upper"), 4)}
+- Bollinger middle: {fmt(indicators.get("bollinger_middle"), 4)}
+- Bollinger lower: {fmt(indicators.get("bollinger_lower"), 4)}
+- Volume change: {fmt(indicators.get("volume_change"), 2)}%
+- Volatility: {fmt(indicators.get("volatility"), 2)}%
+
+## 输出JSON字段
+{{
+  "entryPrice": number,
+  "stopLoss": number,
+  "takeProfit": number,
+  "riskRewardRatio": number,
+  "positionSize": "观望" | "轻仓" | "中仓",
+  "maxLossPercent": number,
+  "volatilityLevel": "低" | "中" | "高" | "未知",
+  "riskScore": 0-100整数,
+  "notes": ["执行提示1", "执行提示2", "执行提示3"]
+}}
+"""
+        return prompt.strip()
+
+    def _parse_risk_response(self, response) -> Optional[dict]:
+        try:
+            import json
+            content = response.content[0].text
+            content = content.replace("```json", "").replace("```", "").strip()
+            result = json.loads(content)
+
+            required = [
+                "entryPrice",
+                "stopLoss",
+                "takeProfit",
+                "riskRewardRatio",
+                "positionSize",
+                "maxLossPercent",
+                "volatilityLevel",
+                "riskScore",
+                "notes",
+            ]
+            if any(field not in result for field in required):
+                raise ValueError("AI风控响应字段不完整")
+
+            if result["positionSize"] not in ["观望", "轻仓", "中仓"]:
+                result["positionSize"] = "观望"
+            if result["volatilityLevel"] not in ["低", "中", "高", "未知"]:
+                result["volatilityLevel"] = "未知"
+
+            for field in ["entryPrice", "stopLoss", "takeProfit", "riskRewardRatio", "maxLossPercent"]:
+                digits = 4 if field in ["entryPrice", "stopLoss", "takeProfit"] else 2
+                result[field] = round(float(result[field]), digits)
+
+            result["riskScore"] = int(max(0, min(100, float(result["riskScore"]))))
+            if not isinstance(result["notes"], list):
+                result["notes"] = [str(result["notes"])]
+            result["notes"] = [str(note) for note in result["notes"][:4]]
+
+            return result
+        except Exception as e:
+            print(f"AI风控响应解析失败: {e}")
+            return None
+
     def _build_prompt(self, price_data: dict, indicators: dict) -> str:
         """
         构建大模型提示词
