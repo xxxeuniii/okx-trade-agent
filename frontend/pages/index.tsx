@@ -189,21 +189,7 @@ export default function Home() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <section className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-accent-green/10 rounded-full mb-6">
-            <span className={`w-2 h-2 rounded-full ${isRealtime ? 'bg-accent-green animate-pulse' : 'bg-light-400'}`} />
-            <span className={`text-sm font-medium ${isRealtime ? 'text-accent-green' : 'text-light-400'}`}>
-              {isRealtime ? '实时数据已连接' : '实时更新已关闭'}
-            </span>
-          </div>
-          
-          <h2 className="text-4xl md:text-5xl font-bold text-light-900 mb-4">
-            AI驱动的<span className="text-gradient">交易信号</span>
-          </h2>
-          <p className="text-light-400 text-lg max-w-2xl mx-auto mb-10">
-            获取任何加密货币的实时分析。我们的AI分析市场模式，提供准确的交易信号，助您做出更明智的投资决策。
-          </p>
-          
+        <section className="mb-8">
           <SearchBar onSearch={handleSearch} loading={loading} />
         </section>
 

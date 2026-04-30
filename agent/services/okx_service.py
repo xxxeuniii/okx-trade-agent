@@ -17,15 +17,19 @@ class OKXService:
         inst_id = f"{symbol}-USDT"
         data = self._get("market/ticker", {"instId": inst_id})
         ticker = data["data"][0]
+        last_price = float(ticker["last"])
+        open_price = float(ticker.get("open24h", last_price))
+        change24h = last_price - open_price
+        changePercent24h = (change24h / open_price) * 100 if open_price else 0
         
         return {
             "symbol": symbol,
-            "price": float(ticker["last"]),
-            "open": float(ticker["open"]),
-            "high": float(ticker["high"]),
-            "low": float(ticker["low"]),
-            "change24h": float(ticker["change"]),
-            "changePercent24h": float(ticker["changePercent"]),
+            "price": last_price,
+            "open": open_price,
+            "high": float(ticker["high24h"]),
+            "low": float(ticker["low24h"]),
+            "change24h": change24h,
+            "changePercent24h": changePercent24h,
             "volume24h": float(ticker["vol24h"])
         }
 
@@ -43,18 +47,22 @@ class OKXService:
         
         ticker_data = self._get("market/ticker", {"instId": inst_id})
         ticker = ticker_data["data"][0]
+        last_price = float(ticker["last"])
+        open_price = float(ticker.get("open24h", last_price))
+        change24h = last_price - open_price
+        changePercent24h = (change24h / open_price) * 100 if open_price else 0
         
         book_data = self._get("market/books", {"instId": inst_id, "sz": "5"})
         book = book_data["data"][0]
         
         return {
             "symbol": symbol,
-            "price": float(ticker["last"]),
-            "open": float(ticker["open"]),
-            "high": float(ticker["high"]),
-            "low": float(ticker["low"]),
-            "change24h": float(ticker["change"]),
-            "changePercent24h": float(ticker["changePercent"]),
+            "price": last_price,
+            "open": open_price,
+            "high": float(ticker["high24h"]),
+            "low": float(ticker["low24h"]),
+            "change24h": change24h,
+            "changePercent24h": changePercent24h,
             "volume24h": float(ticker["vol24h"]),
             "bidPrice": float(book["bids"][0][0]),
             "bidSize": float(book["bids"][0][1]),

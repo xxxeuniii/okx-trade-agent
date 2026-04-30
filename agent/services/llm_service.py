@@ -17,16 +17,20 @@ class LLMService:
         self.api_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")
         self.base_url = os.getenv("ANTHROPIC_BASE_URL", "https://open.bigmodel.cn/api/anthropic")
         self.model = os.getenv("ANTHROPIC_MODEL", "glm-4.5-flash")
+        self.client = None
         
-        # 验证配置
-        if not self.api_key:
-            raise ValueError("环境变量 ANTHROPIC_API_KEY 或 ANTHROPIC_AUTH_TOKEN 未设置")
-        
-        # 初始化客户端
-        self.client = Anthropic(
-            api_key=self.api_key,
-            base_url=self.base_url
-        )
+        # 如果有API Key，初始化客户端
+        if self.api_key:
+            try:
+                self.client = Anthropic(
+                    api_key=self.api_key,
+                    base_url=self.base_url
+                )
+            except Exception as e:
+                print(f"LLM客户端初始化失败: {e}")
+                self.client = None
+        else:
+            print("警告：未设置 ANTHROPIC_API_KEY 环境变量，将使用本地规则生成信号")
     
     def generate_trading_signal(self, price_data: dict, indicators: dict) -> dict:
         """
@@ -39,6 +43,10 @@ class LLMService:
         返回:
             包含信号类型、置信度和分析原因的字典
         """
+        # 如果客户端未初始化，直接使用本地规则
+        if not self.client:
+            return self._get_fallback_signal(indicators)
+            
         try:
             # 构建提示词
             prompt = self._build_prompt(price_data, indicators)

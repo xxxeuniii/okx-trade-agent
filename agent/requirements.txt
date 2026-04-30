@@ -5,3 +5,5 @@ langchain
 langchain-anthropic
 langchain-core
 python-dotenv
+uvicorn
+websocket-client

@@ -219,5 +219,12 @@ class WebSocketMarketProvider(MarketProvider):
             self.connected = False
 
 
-# 创建全局实例
-ws_provider = WebSocketMarketProvider()
+# 创建全局实例（延迟初始化）
+ws_provider = None
+
+def get_ws_provider():
+    """获取 WebSocket 提供者实例"""
+    global ws_provider
+    if ws_provider is None:
+        ws_provider = WebSocketMarketProvider()
+    return ws_provider

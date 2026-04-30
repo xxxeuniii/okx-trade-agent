@@ -61,7 +61,8 @@ class ProviderFactory:
             elif cls._provider_type == "ws":
                 # 尝试创建WebSocket提供者
                 try:
-                    cls._instance = WebSocketMarketProvider()
+                    from .websocket_provider import get_ws_provider
+                    cls._instance = get_ws_provider()
                 except Exception as e:
                     # WebSocket初始化失败，降级到HTTP模式
                     print(f"WebSocket提供者初始化失败: {e}")

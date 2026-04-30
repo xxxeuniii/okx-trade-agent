@@ -34,6 +34,12 @@ export interface RankingItem {
   change24h: number;
 }
 
+export interface ChatResponse {
+  success?: boolean;
+  response: string;
+  error?: string;
+}
+
 export async function getSignal(symbol: string, timeframe: string = "1H"): Promise<SignalResponse> {
   const res = await fetch("http://localhost:8000/api/v1/analysis", {
     method: "POST",
@@ -44,6 +50,23 @@ export async function getSignal(symbol: string, timeframe: string = "1H"): Promi
   });
 
   return res.json();
+}
+
+export async function askAgent(input: string): Promise<ChatResponse> {
+  const res = await fetch("http://localhost:8000/api/v1/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ query: input, chat_history: [] })
+  });
+
+  const data = await res.json();
+  return {
+    success: data.success,
+    response: data.response || data.error || "暂无回复",
+    error: data.error
+  };
 }
 
 export async function getMarketRankings(): Promise<RankingItem[]> {
