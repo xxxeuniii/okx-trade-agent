@@ -3,6 +3,7 @@ import SearchBar from '../components/SearchBar';
 import SignalCard from '../components/SignalCard';
 import RiskManagementCard from '../components/RiskManagementCard';
 import SentimentCard from '../components/SentimentCard';
+import FloatingAssistant from '../components/FloatingAssistant';
 import { getSignal, SignalResponse, getSentimentData, SentimentData } from '../services/api';
 
 // 获取恐慌贪婪指数标签
@@ -197,11 +198,11 @@ export default function Home() {
 
     try {
       // 添加超时机制（15秒）
-      const timeoutPromise = new Promise((_, reject) => 
+      const timeoutPromise = new Promise<never>((_, reject) => 
         setTimeout(() => reject(new Error('请求超时')), 15000)
       );
 
-      const [response, sentimentData] = await Promise.race([
+      const [response, sentimentData] = await Promise.race<[SignalResponse, SentimentData]>([
         Promise.all([
           getSignal(symbol, timeframe),
           fetchSentimentData(symbol)
@@ -310,10 +311,9 @@ export default function Home() {
           </div>
         )}
 
-        {!loading && (
+        {!loading && signal && (
           <section>
-            {signal ? (
-                  <div className="space-y-4">
+            <div className="space-y-4">
                     <div className="flex justify-between items-center flex-wrap gap-4">
                       <div className="flex items-center gap-3">
                         {/* 快捷周期按钮 */}
@@ -411,8 +411,7 @@ export default function Home() {
                         )}
                       </div>
                     </div>
-                  </div>
-                )}
+                    </div>
           </section>
         )}
       </main>
@@ -464,6 +463,9 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      {/* 悬浮AI助手 */}
+      <FloatingAssistant />
     </div>
   );
 }

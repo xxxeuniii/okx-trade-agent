@@ -1,8 +1,9 @@
 # 导入FastAPI相关模块
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Iterator
 # 导入代理逻辑和提供者工厂
 from agent import run_agent, get_market_rankings
 from services.provider_factory import provider_factory
@@ -192,6 +193,38 @@ def clear_chat_memory():
         return {"success": True, "message": "对话记忆已清除"}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+@app.post("/api/v1/chat/stream", summary="流式AI对话")
+def stream_chat(cq: ChatQuery):
+    """
+    使用流式方式进行AI对话
+    
+    请求体:
+        query: 用户查询文本
+        chat_history: 可选的历史对话记录
+    
+    返回:
+        流式AI响应
+    """
+    def generate_stream() -> Iterator[str]:
+        try:
+            agent = get_crypto_agent()
+            history = None
+            
+            if cq.chat_history:
+                history = [{"role": msg.role, "content": msg.content} for msg in cq.chat_history]
+            
+            # 使用流式模式获取结果
+            for chunk in agent.run_stream(cq.query, history):
+                if chunk:
+                    yield f"data: {chunk}\n\n"
+            
+            yield "data: [END]\n\n"
+        except Exception as e:
+            yield f"data: Error: {str(e)}\n\n"
+    
+    return StreamingResponse(generate_stream(), media_type="text/event-stream")
 
 
 @app.post("/api/v1/backtest", summary="策略回测")

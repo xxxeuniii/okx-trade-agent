@@ -14,6 +14,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import StructuredTool
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.callbacks import StreamingStdOutCallbackHandler
 
 # 导入现有的工具函数
 from tools.okx_price_tool import get_price_tool, get_kline_tool
@@ -276,7 +277,85 @@ class CryptoAnalysisAgent:
         清除对话记忆
         """
         self.chat_history = []
-        self.current_symbol = None
+
+    def run_stream(self, query: str, chat_history: Optional[List] = None) -> Iterator[str]:
+        """
+        流式运行 Agent，逐步返回响应
+        
+        参数:
+            query: 用户查询文本
+            chat_history: 可选的历史对话记录
+            
+        返回:
+            生成器，逐步返回响应片段
+        """
+        # 如果没有初始化 LLM，使用简化模式
+        if not self.llm:
+            result = self._handle_simplified_mode(query, chat_history)
+            # 模拟流式输出
+            for i in range(0, len(result), 30):
+                yield result[i:i+30]
+            return
+
+        try:
+            # 准备对话历史
+            messages = []
+            if chat_history:
+                for msg in chat_history[-10:]:
+                    if msg.get("role") == "user":
+                        messages.append(HumanMessage(content=msg["content"]))
+                    elif msg.get("role") == "assistant":
+                        messages.append(AIMessage(content=msg["content"]))
+
+            # 构建提示词
+            system_prompt = """
+你是一位专业的加密货币分析师助手。你的任务是帮助用户获取加密货币的实时价格和技术分析。
+
+支持的币种：BTC、ETH、SOL、DOGE、AVAX、MATIC、BNB、XRP、ADA
+
+请直接回答用户的问题，不需要调用工具。如果用户询问价格或技术指标，你应该告诉用户这些信息需要通过数据分析获得。
+
+回答要简洁明了，用中文回复。
+"""
+
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", system_prompt),
+                ("placeholder", "{chat_history}"),
+                ("human", "{input}")
+            ])
+
+            # 创建带流式回调的LLM
+            streaming_llm = ChatAnthropic(
+                anthropic_api_key=os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"),
+                base_url=os.getenv("ANTHROPIC_BASE_URL", "https://open.bigmodel.cn/api/anthropic"),
+                model=os.getenv("ANTHROPIC_MODEL", "glm-4.5-flash"),
+                temperature=0.3,
+                max_tokens=2048,
+                streaming=True,
+                callbacks=[StreamingStdOutCallbackHandler()]
+            )
+
+            # 创建 Chain
+            chain = prompt | streaming_llm | StrOutputParser()
+
+            # 执行 Chain 并流式返回
+            full_result = ""
+            for chunk in chain.stream({
+                "input": query,
+                "chat_history": messages
+            }):
+                full_result += chunk
+                yield chunk
+
+            # 更新历史
+            self.chat_history.append({"role": "user", "content": query})
+            self.chat_history.append({"role": "assistant", "content": full_result})
+
+        except Exception as e:
+            print(f"[ERROR] LangChain streaming execution failed: {e}")
+            result = self._handle_simplified_mode(query, chat_history)
+            for i in range(0, len(result), 30):
+                yield result[i:i+30]
 
 
 # 创建全局单例
