@@ -4,24 +4,6 @@ import SignalCard from '../components/SignalCard';
 import RiskManagementCard from '../components/RiskManagementCard';
 import { getSignal, SignalResponse } from '../services/api';
 
-// 回测相关类型
-interface Trade {
-  side: 'buy' | 'sell';
-  price: number;
-  pnl?: number;
-}
-
-interface BacktestResult {
-  totalReturn: number;
-  winRate: number;
-  maxDrawdown: number;
-  totalTrades: number;
-  sharpeRatio: number;
-  finalCapital: number;
-  profitFactor: number;
-  trades: Trade[];
-}
-
 // 支持的时间周期 - 完整列表
 const TIMEFRAMES = [
   { label: '1秒', value: '1s' },
@@ -54,18 +36,8 @@ export default function Home() {
   const [isRealtime, setIsRealtime] = useState(false);
   const [timeframe, setTimeframe] = useState('1H');
   const [showTimeframeDropdown, setShowTimeframeDropdown] = useState(false);
-  const [activeTab, setActiveTab] = useState<'analysis' | 'chat' | 'backtest'>('analysis');
   const wsRef = useRef<WebSocket | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  
-  // 回测相关状态
-  const [backtestParams, setBacktestParams] = useState({
-    symbol: 'BTC',
-    timeframe: '1H',
-    initialCapital: 10000
-  });
-  const [backtestLoading, setBacktestLoading] = useState(false);
-  const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
 
   // 点击外部关闭下拉框
   useEffect(() => {
@@ -194,35 +166,6 @@ export default function Home() {
     setIsRealtime(!isRealtime);
   };
 
-  // 回测函数
-  const handleStartBacktest = async () => {
-    setBacktestLoading(true);
-    setBacktestResult(null);
-    
-    try {
-      // 调用后端API进行回测
-      const response = await fetch('http://localhost:8000/api/v1/backtest', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(backtestParams)
-      });
-      
-      if (!response.ok) {
-        throw new Error('回测请求失败');
-      }
-      
-      const data = await response.json();
-      setBacktestResult(data);
-    } catch (err) {
-      console.error('回测失败:', err);
-      setError('回测失败，请稍后重试');
-    } finally {
-      setBacktestLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen">
       <header className="bg-white/80 backdrop-blur-lg border-b border-light-200/50 sticky top-0 z-50">
@@ -247,49 +190,6 @@ export default function Home() {
         <section className="mb-8 max-w-4xl mx-auto">
           <SearchBar onSearch={handleSearch} loading={loading} />
         </section>
-
-        {/* 标签切换 */}
-        <div className="flex justify-center gap-3 mb-6">
-          <button
-            onClick={() => setActiveTab('analysis')}
-            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
-              activeTab === 'analysis'
-                ? 'bg-accent-blue text-white shadow-md shadow-accent-blue/30'
-                : 'bg-white text-light-600 hover:bg-light-50 border border-light-200 hover:border-accent-blue/30'
-            }`}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            交易分析
-          </button>
-          <button
-            onClick={() => setActiveTab('chat')}
-            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
-              activeTab === 'chat'
-                ? 'bg-accent-blue text-white shadow-md shadow-accent-blue/30'
-                : 'bg-white text-light-600 hover:bg-light-50 border border-light-200 hover:border-accent-blue/30'
-            }`}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            AI 对话
-          </button>
-          <button
-            onClick={() => setActiveTab('backtest')}
-            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
-              activeTab === 'backtest'
-                ? 'bg-accent-blue text-white shadow-md shadow-accent-blue/30'
-                : 'bg-white text-light-600 hover:bg-light-50 border border-light-200 hover:border-accent-blue/30'
-            }`}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-            </svg>
-            策略回测
-          </button>
-        </div>
 
         {loading && (
           <div className="flex flex-col items-center justify-center py-16">
@@ -417,7 +317,7 @@ export default function Home() {
                         <button
                           key={symbol}
                           onClick={() => handleSearch(symbol)}
-                          className="px-5 py-3 bg-gradient-to-br from-light-50 to-white hover:from-accent-blue/5 hover:to-accent-green/5 border border-light-200 hover:border-accent-blue/30 rounded-xl text-sm font-semibold text-light-700 transition-all duration-300 hover:scale-105"
+                          className="px-5 py-3 bg-light-50 hover:bg-accent-blue/5 border border-light-200 hover:border-accent-blue/30 rounded-xl text-sm font-semibold text-light-700 transition-all duration-300 hover:scale-105"
                         >
                           {symbol}
                         </button>
@@ -426,203 +326,6 @@ export default function Home() {
                   </div>
                 )}
               </>
-            )}
-
-            {/* AI对话标签 */}
-            {activeTab === 'chat' && (
-              <div className="max-w-4xl mx-auto">
-                <div className="bg-white rounded-2xl shadow-lg border border-light-200 overflow-hidden">
-                  <div className="bg-accent-blue px-6 py-4">
-                    <h3 className="text-white font-semibold">AI 交易助手</h3>
-                    <p className="text-white/70 text-sm">用自然语言查询加密货币信息</p>
-                  </div>
-                  <div className="p-4">
-                    <div className="bg-light-50 rounded-xl p-8 text-center">
-                      <div className="w-16 h-16 bg-light-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-8 h-8 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                        </svg>
-                      </div>
-                      <h4 className="text-lg font-semibold text-light-800 mb-2">开始对话</h4>
-                      <p className="text-light-400 text-sm">输入您的问题，例如：</p>
-                      <div className="flex flex-wrap justify-center gap-2 mt-4">
-                        {['BTC现在多少钱？', '分析ETH的走势', '推荐一个币种'].map((example) => (
-                          <button
-                            key={example}
-                            className="px-4 py-2 bg-white border border-light-200 rounded-lg text-sm text-light-600 hover:border-accent-blue/30 hover:text-accent-blue transition-all"
-                          >
-                            {example}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {/* 输入框 */}
-                    <div className="mt-4 flex gap-3">
-                      <input
-                        type="text"
-                        placeholder="输入您的问题..."
-                        className="flex-1 px-4 py-3 bg-light-50 border border-light-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-blue/30 focus:border-accent-blue"
-                      />
-                      <button className="px-6 py-3 bg-accent-blue hover:bg-accent-blue/90 text-white font-semibold rounded-xl transition-all">
-                        发送
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 策略回测标签 */}
-            {activeTab === 'backtest' && (
-              <div className="max-w-4xl mx-auto">
-                <div className="bg-white rounded-2xl shadow-lg border border-light-200 overflow-hidden">
-                  <div className="bg-accent-green px-6 py-4">
-                    <h3 className="text-white font-semibold">策略回测</h3>
-                    <p className="text-white/70 text-sm">测试交易策略在历史数据上的表现</p>
-                  </div>
-                  <div className="p-6">
-                    {/* 回测参数设置 */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                      <div>
-                        <label className="block text-sm font-medium text-light-700 mb-2">选择币种</label>
-                        <select 
-                          className="w-full px-4 py-3 bg-light-50 border border-light-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-green/30 focus:border-accent-green"
-                          value={backtestParams.symbol}
-                          onChange={(e) => setBacktestParams({...backtestParams, symbol: e.target.value})}
-                        >
-                          <option value="BTC">BTC</option>
-                          <option value="ETH">ETH</option>
-                          <option value="SOL">SOL</option>
-                          <option value="AVAX">AVAX</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-light-700 mb-2">时间周期</label>
-                        <select 
-                          className="w-full px-4 py-3 bg-light-50 border border-light-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-green/30 focus:border-accent-green"
-                          value={backtestParams.timeframe}
-                          onChange={(e) => setBacktestParams({...backtestParams, timeframe: e.target.value})}
-                        >
-                          <option value="1H">1小时</option>
-                          <option value="4H">4小时</option>
-                          <option value="1D">1日</option>
-                          <option value="1W">1周</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-light-700 mb-2">初始资金 (USDT)</label>
-                        <input
-                          type="number"
-                          value={backtestParams.initialCapital}
-                          onChange={(e) => setBacktestParams({...backtestParams, initialCapital: Number(e.target.value)})}
-                          className="w-full px-4 py-3 bg-light-50 border border-light-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-green/30 focus:border-accent-green"
-                        />
-                      </div>
-                    </div>
-                    
-                    {/* 开始回测按钮 */}
-                    <button 
-                      onClick={handleStartBacktest}
-                      disabled={backtestLoading}
-                      className="w-full py-4 bg-accent-green hover:bg-accent-green/90 disabled:bg-light-300 text-white font-semibold rounded-xl transition-all shadow-md shadow-accent-green/30 disabled:shadow-none"
-                    >
-                      {backtestLoading ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                          </svg>
-                          正在回测...
-                        </span>
-                      ) : '🚀 开始回测'}
-                    </button>
-
-                    {/* 回测结果展示区域 */}
-                    {backtestResult ? (
-                      <div className="mt-6 space-y-6">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <div className="bg-light-50 rounded-xl p-4 text-center border border-light-200">
-                            <div className={`text-2xl font-bold mb-1 ${backtestResult.totalReturn >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                              {backtestResult.totalReturn >= 0 ? '+' : ''}{(backtestResult.totalReturn * 100).toFixed(2)}%
-                            </div>
-                            <div className="text-sm text-light-400">总收益率</div>
-                          </div>
-                          <div className="bg-light-50 rounded-xl p-4 text-center border border-light-200">
-                            <div className="text-2xl font-bold text-accent-blue mb-1">
-                              {backtestResult.winRate.toFixed(1)}%
-                            </div>
-                            <div className="text-sm text-light-400">胜率</div>
-                          </div>
-                          <div className="bg-light-50 rounded-xl p-4 text-center border border-light-200">
-                            <div className="text-2xl font-bold text-accent-red mb-1">
-                              -{(backtestResult.maxDrawdown * 100).toFixed(2)}%
-                            </div>
-                            <div className="text-sm text-light-400">最大回撤</div>
-                          </div>
-                          <div className="bg-light-50 rounded-xl p-4 text-center border border-light-200">
-                            <div className="text-2xl font-bold text-light-700 mb-1">
-                              {backtestResult.totalTrades}
-                            </div>
-                            <div className="text-sm text-light-400">交易次数</div>
-                          </div>
-                        </div>
-
-                        {/* 额外指标 */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="bg-light-50 rounded-xl p-4 border border-light-200">
-                            <div className="text-sm text-light-400 mb-1">夏普比率</div>
-                            <div className="text-xl font-bold text-light-800">{backtestResult.sharpeRatio.toFixed(2)}</div>
-                          </div>
-                          <div className="bg-light-50 rounded-xl p-4 border border-light-200">
-                            <div className="text-sm text-light-400 mb-1">最终资金</div>
-                            <div className="text-xl font-bold text-light-800">${backtestResult.finalCapital.toFixed(2)}</div>
-                          </div>
-                          <div className="bg-light-50 rounded-xl p-4 border border-light-200">
-                            <div className="text-sm text-light-400 mb-1">盈亏比</div>
-                            <div className="text-xl font-bold text-light-800">{backtestResult.profitFactor.toFixed(2)}</div>
-                          </div>
-                        </div>
-
-                        {/* 交易记录 */}
-                        <div className="bg-light-50 rounded-xl p-4 border border-light-200">
-                          <h4 className="font-semibold text-light-800 mb-4">最近交易记录</h4>
-                          <div className="space-y-2 max-h-64 overflow-y-auto">
-                            {backtestResult.trades.slice(-10).reverse().map((trade, index) => (
-                              <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-light-200">
-                                <div className="flex items-center gap-3">
-                                  <span className={`w-2 h-2 rounded-full ${trade.side === 'buy' ? 'bg-accent-green' : 'bg-accent-red'}`}></span>
-                                  <span className="font-medium text-light-800">
-                                    {trade.side === 'buy' ? '买入' : '卖出'}
-                                  </span>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-light-800">${trade.price.toFixed(2)}</div>
-                                  <div className="text-xs text-light-400">
-                                    {trade.pnl !== undefined && `${trade.pnl >= 0 ? '+' : ''}${(trade.pnl * 100).toFixed(2)}%`}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mt-6 p-6 bg-light-50 rounded-xl">
-                        <div className="text-center">
-                          <div className="w-20 h-20 bg-light-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <svg className="w-10 h-10 text-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                            </svg>
-                          </div>
-                          <h4 className="text-lg font-semibold text-light-800 mb-2">选择参数后开始回测</h4>
-                          <p className="text-light-400 text-sm">回测将使用AI策略在历史数据上模拟交易，评估策略表现</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
           </section>
         )}
       </main>
@@ -632,7 +335,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div className="md:col-span-2">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-8 h-8 bg-gradient-to-br from-accent-green to-accent-blue rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-accent-blue rounded-lg flex items-center justify-center">
                   <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
