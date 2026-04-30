@@ -44,15 +44,16 @@ export default function FloatingAssistant() {
   // 处理拖拽调整大小
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
-    setIsResizing(true);
+    e.stopPropagation();
     startPosRef.current = { x: e.clientX, y: e.clientY };
     startDimRef.current = { width: dimensions.width, height: dimensions.height };
+    setIsResizing(true);
   };
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
+    if (!isResizing) return;
 
+    const handleMouseMove = (e: MouseEvent) => {
       const deltaX = e.clientX - startPosRef.current.x;
       const deltaY = e.clientY - startPosRef.current.y;
 
@@ -67,10 +68,8 @@ export default function FloatingAssistant() {
       setIsResizing(false);
     };
 
-    if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    }
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
