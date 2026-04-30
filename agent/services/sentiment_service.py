@@ -79,10 +79,11 @@ class SentimentService:
             data = self._get(f"https://www.okx.com/api/v5/public/funding-rate", {"instId": inst_id})
             
             if data and "data" in data and len(data["data"]) > 0:
+                item = data["data"][0]
                 return {
-                    "funding_rate": float(data["data"][0]["fundingRate"]),
-                    "funding_rate_24h_avg": float(data["data"][0]["fundingRate24hAvg"]),
-                    "next_funding_time": int(data["data"][0]["nextFundingTime"]),
+                    "funding_rate": float(item.get("fundingRate", 0.0001)),
+                    "funding_rate_24h_avg": float(item.get("fundingRate24hAvg", item.get("fundingRate", 0.0001))),
+                    "next_funding_time": int(item.get("nextFundingTime", 0)),
                     "symbol": symbol
                 }
         except Exception as e:
@@ -105,18 +106,27 @@ class SentimentService:
             }
         """
         try:
-            # 使用永续合约格式，API端点为market
-            inst_id = f"{symbol}-USDT-SWAP"
-            data = self._get(f"https://www.okx.com/api/v5/market/long-short-ratio", {"instId": inst_id})
+            # 尝试多个可能的API端点
+            endpoints = [
+                f"https://www.okx.com/api/v5/market/long-short-ratio",
+                f"https://www.okx.com/api/v5/public/long-short-ratio"
+            ]
             
-            if data and "data" in data and len(data["data"]) > 0:
-                return {
-                    "long_short_ratio": float(data["data"][0]["longShortRatio"]),
-                    "long_account_ratio": float(data["data"][0]["longAccountRatio"]),
-                    "short_account_ratio": float(data["data"][0]["shortAccountRatio"]),
-                    "symbol": symbol,
-                    "timestamp": int(data["data"][0]["ts"])
-                }
+            inst_id = f"{symbol}-USDT-SWAP"
+            
+            for endpoint in endpoints:
+                data = self._get(endpoint, {"instId": inst_id})
+                
+                if data and "data" in data and len(data["data"]) > 0:
+                    item = data["data"][0]
+                    return {
+                        "long_short_ratio": float(item.get("longShortRatio", 1.0)),
+                        "long_account_ratio": float(item.get("longAccountRatio", 0.5)),
+                        "short_account_ratio": float(item.get("shortAccountRatio", 0.5)),
+                        "symbol": symbol,
+                        "timestamp": int(item.get("ts", 0))
+                    }
+        
         except Exception as e:
             print(f"获取OKX多空比失败: {e}")
         

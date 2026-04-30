@@ -5,11 +5,63 @@
 """
 
 import os
-from typing import Optional, Dict, Any
+import time
+import random
+from typing import Optional, Dict, Any, Callable
 from langchain_anthropic import ChatAnthropic
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
+
+
+def retry_with_backoff(max_retries: int = 3, initial_delay: float = 1.0, backoff_factor: float = 2.0):
+    """
+    重试装饰器，支持指数退避策略
+    
+    参数:
+        max_retries: 最大重试次数
+        initial_delay: 初始延迟（秒）
+        backoff_factor: 退避因子
+    """
+    def decorator(func: Callable) -> Callable:
+        def wrapper(*args, **kwargs):
+            delay = initial_delay
+            last_exception = None
+            
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    error_msg = str(e)
+                    
+                    # 检查是否是限流错误
+                    if "429" in error_msg or "速率限制" in error_msg or "rate limit" in error_msg.lower():
+                        if attempt < max_retries - 1:
+                            # 添加随机抖动避免重试风暴
+                            jitter = random.uniform(0, delay * 0.1)
+                            wait_time = delay + jitter
+                            print(f"[WARN] API rate limited, retrying in {wait_time:.2f}s (attempt {attempt + 1}/{max_retries})")
+                            time.sleep(wait_time)
+                            delay *= backoff_factor
+                            continue
+                    elif attempt < max_retries - 1:
+                        # 其他错误也重试
+                        jitter = random.uniform(0, delay * 0.1)
+                        wait_time = delay + jitter
+                        print(f"[WARN] API call failed, retrying in {wait_time:.2f}s (attempt {attempt + 1}/{max_retries}): {e}")
+                        time.sleep(wait_time)
+                        delay *= backoff_factor
+                        continue
+                
+                # 如果不是限流错误或已达到最大重试次数，抛出异常
+                raise last_exception
+            
+            # 达到最大重试次数
+            raise last_exception
+        
+        return wrapper
+    return decorator
 
 
 class TradingSignal(BaseModel):
@@ -89,24 +141,30 @@ class LLMService:
             return self._get_fallback_signal(indicators)
             
         try:
-            # 1. 构建输出解析器（使用 LangChain JsonOutputParser）
-            parser = JsonOutputParser(pydantic_object=TradingSignal)
-            
-            # 2. 构建提示词模板
-            prompt = self._build_trading_signal_prompt(price_data, indicators, parser)
-            
-            # 3. 创建 LangChain Chain（提示词 + LLM + 解析器）
-            chain = prompt | self.llm | parser
-            
-            # 4. 执行 Chain 获取结果
-            result = chain.invoke({})
-            
-            # 5. 验证和处理结果
-            return self._validate_trading_signal(result)
-            
+            return self._generate_trading_signal_with_retry(price_data, indicators)
         except Exception as e:
-            print(f"[ERROR] LangChain trading signal generation failed: {e}")
+            print(f"[ERROR] LangChain trading signal generation failed after retries: {e}")
             return self._get_fallback_signal(indicators)
+    
+    @retry_with_backoff(max_retries=3, initial_delay=2.0, backoff_factor=2.0)
+    def _generate_trading_signal_with_retry(self, price_data: dict, indicators: dict) -> dict:
+        """
+        带重试机制的交易信号生成
+        """
+        # 1. 构建输出解析器（使用 LangChain JsonOutputParser）
+        parser = JsonOutputParser(pydantic_object=TradingSignal)
+        
+        # 2. 构建提示词模板
+        prompt = self._build_trading_signal_prompt(price_data, indicators, parser)
+        
+        # 3. 创建 LangChain Chain（提示词 + LLM + 解析器）
+        chain = prompt | self.llm | parser
+        
+        # 4. 执行 Chain 获取结果
+        result = chain.invoke({})
+        
+        # 5. 验证和处理结果
+        return self._validate_trading_signal(result)
 
     def generate_risk_management(self, price_data: dict, signal_data: dict) -> Optional[dict]:
         """
@@ -124,24 +182,30 @@ class LLMService:
             return None
 
         try:
-            # 1. 构建输出解析器
-            parser = JsonOutputParser(pydantic_object=RiskManagement)
-            
-            # 2. 构建提示词模板
-            prompt = self._build_risk_management_prompt(price_data, signal_data, parser)
-            
-            # 3. 创建 LangChain Chain
-            chain = prompt | self.llm | parser
-            
-            # 4. 执行 Chain 获取结果
-            result = chain.invoke({})
-            
-            # 5. 验证和处理结果
-            return self._validate_risk_management(result)
-            
+            return self._generate_risk_management_with_retry(price_data, signal_data)
         except Exception as e:
-            print(f"[ERROR] LangChain risk management generation failed: {e}")
+            print(f"[ERROR] LangChain risk management generation failed after retries: {e}")
             return None
+    
+    @retry_with_backoff(max_retries=3, initial_delay=2.0, backoff_factor=2.0)
+    def _generate_risk_management_with_retry(self, price_data: dict, signal_data: dict) -> Optional[dict]:
+        """
+        带重试机制的风险控制方案生成
+        """
+        # 1. 构建输出解析器
+        parser = JsonOutputParser(pydantic_object=RiskManagement)
+        
+        # 2. 构建提示词模板
+        prompt = self._build_risk_management_prompt(price_data, signal_data, parser)
+        
+        # 3. 创建 LangChain Chain
+        chain = prompt | self.llm | parser
+        
+        # 4. 执行 Chain 获取结果
+        result = chain.invoke({})
+        
+        # 5. 验证和处理结果
+        return self._validate_risk_management(result)
 
     def _build_trading_signal_prompt(self, price_data: dict, indicators: dict, parser: JsonOutputParser) -> ChatPromptTemplate:
         """
