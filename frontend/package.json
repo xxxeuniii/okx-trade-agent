@@ -12,6 +12,7 @@
     "@tailwindcss/vite": "^4.2.4",
     "ai": "^6.0.170",
     "autoprefixer": "^10.5.0",
+    "axios": "^1.15.2",
     "lucide-react": "^1.14.0",
     "next": "^14.0.0",
     "react": "^18.0.0",

@@ -4,6 +4,8 @@
  * 封装与后端API的交互，提供交易信号获取、AI对话和市场排行榜等功能。
  */
 
+import axios from './axios';
+
 /**
  * 技术指标接口定义
  * 包含常用的技术分析指标
@@ -86,37 +88,22 @@ export interface ChatResponse {
  * @returns Promise<SignalResponse> - 包含信号和分析数据的响应
  */
 export async function getSignal(symbol: string, timeframe: string = "1H"): Promise<SignalResponse> {
-  const res = await fetch("http://localhost:8081/api/v1/analysis", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ input: symbol, timeframe })
-  });
-
-  return res.json();
+  return axios.post('/api/v1/analysis', { input: symbol, timeframe });
 }
 
 /**
  * 与AI助手对话
  * 
  * @param input - 用户输入的查询文本
+ * @param chatHistory - 历史对话记录
  * @returns Promise<ChatResponse> - AI回复结果
  */
-export async function askAgent(input: string): Promise<ChatResponse> {
-  const res = await fetch("http://localhost:8000/api/v1/chat", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ query: input, chat_history: [] })
-  });
-
-  const data = await res.json();
+export async function askAgent(input: string, chatHistory: Array<{ role: string; content: string }> = []): Promise<ChatResponse> {
+  const result = await axios.post('/api/v1/chat', { query: input, chat_history: chatHistory }) as { success?: boolean; response?: string; error?: string };
   return {
-    success: data.success,
-    response: data.response || data.error || "暂无回复",
-    error: data.error
+    success: result.success,
+    response: result.response || result.error || "暂无回复",
+    error: result.error
   };
 }
 
@@ -141,14 +128,7 @@ export interface SentimentData {
  * @returns Promise<SentimentData> - 情绪数据响应
  */
 export async function getSentimentData(symbol: string = "BTC"): Promise<SentimentData> {
-  const res = await fetch(`http://localhost:8081/api/v1/sentiment?symbol=${symbol}`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json"
-    }
-  });
-
-  const data = await res.json();
+  const data = await axios.get('/api/v1/sentiment', { params: { symbol } });
   return data.data || {
     longShortRatio: 1.0,
     longAccountRatio: 0.5,
@@ -164,15 +144,34 @@ export async function getSentimentData(symbol: string = "BTC"): Promise<Sentimen
 /**
  * 获取市场排行榜
  * 
- * @returns Promise<RankingItem[]> - 多币种信号排名列表
+ * @returns Promise<RankingItem[]> - 排行榜数据
  */
-export async function getMarketRankings(): Promise<RankingItem[]> {
-  const res = await fetch("http://localhost:8000/api/v1/rankings", {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json"
-    }
-  });
+export async function getRankings(): Promise<RankingItem[]> {
+  return axios.get('/api/v1/rankings');
+}
 
-  return res.json();
+/**
+ * 流式AI对话
+ * 
+ * @param input - 用户输入的查询文本
+ * @param chatHistory - 历史对话记录
+ * @returns Promise<Response> - 流式响应
+ */
+export async function askAgentStream(input: string, chatHistory: Array<{ role: string; content: string }> = []): Promise<Response> {
+  return fetch('http://localhost:8081/api/v1/chat/stream', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ query: input, chat_history: chatHistory })
+  });
+}
+
+/**
+ * 清除对话记忆
+ * 
+ * @returns Promise<{ success: boolean; message: string }> - 操作结果
+ */
+export async function clearChatMemory(): Promise<{ success: boolean; message: string }> {
+  return axios.post('/api/v1/chat/clear');
 }

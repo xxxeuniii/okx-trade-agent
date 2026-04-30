@@ -7,6 +7,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { askAgentStream } from '../services/api';
 
 interface Message {
   id: string;
@@ -77,7 +78,7 @@ export default function FloatingAssistant() {
     };
   }, [isResizing]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
@@ -100,18 +101,10 @@ export default function FloatingAssistant() {
       content: ''
     }]);
 
-    // 使用fetch进行流式请求
-    fetch('http://localhost:8081/api/v1/chat/stream', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        query: input.trim(),
-        chat_history: messages.map(m => ({ role: m.role, content: m.content }))
-      })
-    })
-    .then(response => {
+    try {
+      // 使用封装的API进行流式请求
+      const response = await askAgentStream(input.trim(), messages.map(m => ({ role: m.role, content: m.content })));
+      
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
@@ -168,16 +161,15 @@ export default function FloatingAssistant() {
       };
 
       readChunk();
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      setMessages(prev => prev.map(msg => 
-        msg.id === assistantMessageId 
-          ? { ...msg, content: '抱歉，连接服务器时出现问题，请稍后重试。' }
-          : msg
-      ));
-      setIsLoading(false);
-    });
+      } catch (error) {
+        console.error('Error:', error);
+        setMessages(prev => prev.map(msg => 
+          msg.id === assistantMessageId 
+            ? { ...msg, content: '抱歉，连接服务器时出现问题，请稍后重试。' }
+            : msg
+        ));
+        setIsLoading(false);
+      }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
