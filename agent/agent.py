@@ -137,6 +137,124 @@ def generate_signal(price_data: dict) -> dict:
         return _generate_signal_fallback(price_data)
 
 
+def calculate_risk_management(price_data: dict, signal_data: dict) -> dict:
+    price = float(price_data.get("price") or 0)
+    indicators = price_data.get("indicators", {}) or {}
+    signal = signal_data.get("signal", "NEUTRAL")
+    confidence = float(signal_data.get("confidence") or 0.5)
+
+    if price <= 0:
+        return {
+            "entryPrice": 0,
+            "stopLoss": 0,
+            "takeProfit": 0,
+            "riskRewardRatio": 0,
+            "positionSize": "观望",
+            "maxLossPercent": 0,
+            "volatilityLevel": "未知",
+            "riskScore": 100,
+            "notes": ["市场价格不可用，暂不建议开仓。"],
+        }
+
+    volatility = indicators.get("volatility")
+    if volatility is None:
+        volatility = abs(float(price_data.get("changePercent24h") or 0)) / 2
+    volatility = max(float(volatility or 0), 0.5)
+
+    if volatility < 2:
+        volatility_level = "低"
+        fallback_risk_pct = 0.018
+    elif volatility <= 5:
+        volatility_level = "中"
+        fallback_risk_pct = 0.03
+    else:
+        volatility_level = "高"
+        fallback_risk_pct = 0.05
+
+    supports = [
+        value for value in [
+            indicators.get("bollinger_lower"),
+            indicators.get("sma_7"),
+            indicators.get("sma_20"),
+        ]
+        if value is not None and 0 < float(value) < price
+    ]
+    resistances = [
+        value for value in [
+            indicators.get("bollinger_upper"),
+            indicators.get("sma_7"),
+            indicators.get("sma_20"),
+        ]
+        if value is not None and float(value) > price
+    ]
+
+    nearest_support = max([float(v) for v in supports], default=price * (1 - fallback_risk_pct))
+    nearest_resistance = min([float(v) for v in resistances], default=price * (1 + fallback_risk_pct * 2))
+
+    if signal == "BUY":
+        stop_loss = min(nearest_support, price * (1 - fallback_risk_pct * 0.8))
+        unit_risk = max(price - stop_loss, price * 0.006)
+        take_profit = max(nearest_resistance, price + unit_risk * 2)
+        max_loss_percent = unit_risk / price * 100
+        rr = (take_profit - price) / unit_risk
+        notes = [
+            "以当前价格作为计划入场价，止损参考下方支撑与波动率缓冲。",
+            "止盈至少覆盖约 2 倍单笔风险，避免盈亏比过低。",
+        ]
+    elif signal == "SELL":
+        stop_loss = max(nearest_resistance, price * (1 + fallback_risk_pct * 0.8))
+        unit_risk = max(stop_loss - price, price * 0.006)
+        take_profit = min(nearest_support, price - unit_risk * 2)
+        take_profit = max(take_profit, price * 0.01)
+        max_loss_percent = unit_risk / price * 100
+        rr = (price - take_profit) / unit_risk
+        notes = [
+            "以当前价格作为计划入场价，止损参考上方阻力与波动率缓冲。",
+            "止盈至少覆盖约 2 倍单笔风险，避免盈亏比过低。",
+        ]
+    else:
+        stop_loss = nearest_support
+        take_profit = nearest_resistance
+        max_loss_percent = abs(price - stop_loss) / price * 100
+        rr = 0
+        notes = [
+            "当前信号不明确，优先等待方向确认。",
+            "支撑与阻力仅作为观察区间，不构成开仓建议。",
+        ]
+
+    risk_score = 35
+    risk_score += 25 if volatility_level == "高" else 12 if volatility_level == "中" else 4
+    risk_score += 18 if confidence < 0.55 else 8 if confidence < 0.7 else -5
+    risk_score += 15 if rr and rr < 1.5 else -8 if rr >= 2 else 0
+    risk_score = int(max(5, min(95, risk_score)))
+
+    if signal == "NEUTRAL" or confidence < 0.55 or (rr and rr < 1.2):
+        position_size = "观望"
+    elif confidence >= 0.72 and volatility_level != "高" and rr >= 1.8:
+        position_size = "中仓"
+    else:
+        position_size = "轻仓"
+
+    if volatility_level == "高" and position_size == "中仓":
+        position_size = "轻仓"
+    if volatility_level == "高":
+        notes.append("当前波动偏高，建议降低仓位并严格执行止损。")
+    if rr and rr < 1.5:
+        notes.append("风险收益比偏低，即使方向正确也不适合激进开仓。")
+
+    return {
+        "entryPrice": round(price, 4),
+        "stopLoss": round(stop_loss, 4),
+        "takeProfit": round(take_profit, 4),
+        "riskRewardRatio": round(rr, 2),
+        "positionSize": position_size,
+        "maxLossPercent": round(max_loss_percent, 2),
+        "volatilityLevel": volatility_level,
+        "riskScore": risk_score,
+        "notes": notes,
+    }
+
+
 def _generate_signal_fallback(price_data: dict) -> dict:
     """
     降级的信号生成函数（当大模型调用失败时使用）
@@ -275,6 +393,7 @@ def analyze_symbol(symbol: str, timeframe: str = "1H") -> dict:
             price_data["indicators"] = indicators
         
         signal_data = generate_signal(price_data)
+        risk_data = calculate_risk_management(price_data, signal_data)
         
         return {
             "symbol": symbol,
@@ -284,6 +403,7 @@ def analyze_symbol(symbol: str, timeframe: str = "1H") -> dict:
             "confidence": signal_data["confidence"],
             "reason": signal_data["reason"],
             "indicators": signal_data["indicators"],
+            "risk": risk_data,
             "timeframe": timeframe
         }
     else:
@@ -295,6 +415,7 @@ def analyze_symbol(symbol: str, timeframe: str = "1H") -> dict:
             "confidence": 0.5,
             "reason": ["无法获取市场数据"],
             "indicators": {},
+            "risk": calculate_risk_management({"price": 0, "indicators": {}}, {"signal": "NEUTRAL", "confidence": 0.5}),
             "timeframe": timeframe
         }
 
@@ -336,6 +457,7 @@ def run_agent(input_text: str, timeframe: str = "1H") -> dict:
         
         # 生成交易信号
         signal_data = generate_signal(price_data)
+        risk_data = calculate_risk_management(price_data, signal_data)
         
         return {
             "symbol": target_symbol,
@@ -345,6 +467,7 @@ def run_agent(input_text: str, timeframe: str = "1H") -> dict:
             "confidence": signal_data["confidence"],
             "reason": signal_data["reason"],
             "indicators": signal_data["indicators"],
+            "risk": risk_data,
             "timeframe": timeframe
         }
     else:
@@ -357,6 +480,7 @@ def run_agent(input_text: str, timeframe: str = "1H") -> dict:
             "confidence": 0.5,
             "reason": ["无法获取市场数据"],
             "indicators": {},
+            "risk": calculate_risk_management({"price": 0, "indicators": {}}, {"signal": "NEUTRAL", "confidence": 0.5}),
             "timeframe": timeframe
         }
 

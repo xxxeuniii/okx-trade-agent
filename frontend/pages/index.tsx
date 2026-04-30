@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import SearchBar from '../components/SearchBar';
 import SignalCard from '../components/SignalCard';
+import RiskManagementCard from '../components/RiskManagementCard';
 import { getSignal, SignalResponse } from '../services/api';
 
 // 支持的时间周期 - 完整列表
@@ -188,8 +189,8 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <section className="mb-8">
+      <main className="max-w-[1760px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10 py-12">
+        <section className="mb-8 max-w-4xl mx-auto">
           <SearchBar onSearch={handleSearch} loading={loading} />
         </section>
 
@@ -290,7 +291,12 @@ export default function Home() {
                   <span>|</span>
                   <span>当前周期: {TIMEFRAMES.find(t => t.value === timeframe)?.label}</span>
                 </div>
-                <SignalCard data={signal} />
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] 2xl:grid-cols-[minmax(0,1fr)_460px] gap-6 2xl:gap-8 items-start">
+                  <SignalCard data={signal} />
+                  {signal.risk && (
+                    <RiskManagementCard risk={signal.risk} signal={signal.signal} />
+                  )}
+                </div>
               </div>
             ) : (
               <div className="glass-card rounded-2xl p-12 text-center">

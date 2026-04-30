@@ -22,7 +22,20 @@ export interface SignalResponse {
   confidence: number;
   reason: string[];
   indicators?: Indicators;
+  risk?: RiskManagement;
   timeframe?: string;
+}
+
+export interface RiskManagement {
+  entryPrice: number;
+  stopLoss: number;
+  takeProfit: number;
+  riskRewardRatio: number;
+  positionSize: '观望' | '轻仓' | '中仓';
+  maxLossPercent: number;
+  volatilityLevel: '低' | '中' | '高' | '未知';
+  riskScore: number;
+  notes: string[];
 }
 
 export interface RankingItem {
