@@ -209,10 +209,7 @@ export default function Home() {
 
         {!loading && (
           <section>
-            {/* 交易分析标签 */}
-            {activeTab === 'analysis' && (
-              <>
-                {signal ? (
+            {signal ? (
                   <div className="space-y-4">
                     <div className="flex justify-between items-center flex-wrap gap-4">
                       <div className="flex items-center gap-3">
@@ -322,7 +319,6 @@ export default function Home() {
                     </div>
                   </div>
                 )}
-              </>
           </section>
         )}
       </main>
