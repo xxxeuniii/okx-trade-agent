@@ -121,30 +121,21 @@ const MetricCard = ({
   label, 
   value, 
   unit = '', 
-  color, 
-  trend = 0 
+  color 
 }: { 
   label: string; 
   value: number; 
   unit?: string;
   color: string; 
-  trend?: number;
 }) => {
-  const trendIcon = trend > 0 ? '↑' : trend < 0 ? '↓' : '';
-  
   return (
-    <div className="bg-dark-800 rounded-lg p-4 border border-dark-600">
+    <div className="bg-light-50/50 rounded-xl p-4">
       <p className="text-xs text-light-400 mb-2">{label}</p>
       <div className="flex items-baseline gap-1">
         <span className="text-xl font-bold" style={{ color }}>
           {typeof value === 'number' ? value.toFixed(4) : value}
         </span>
         <span className="text-xs text-light-400">{unit}</span>
-        {trendIcon && (
-          <span className={`text-xs ${trend > 0 ? 'text-accent-red' : 'text-accent-green'}`}>
-            {trendIcon}
-          </span>
-        )}
       </div>
     </div>
   );
@@ -155,52 +146,54 @@ const MetricCard = ({
  */
 export default function SentimentCard({ data }: SentimentCardProps) {
   return (
-    <div className="bg-dark-800 rounded-xl p-5 border border-dark-600">
-      {/* 标题 */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center">
-          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-          </svg>
+    <div className="glass-card rounded-2xl overflow-hidden mb-6">
+      <div className="bg-gradient-to-br from-accent-blue/5 via-white to-accent-purple/5 p-8">
+        {/* 标题 */}
+        <div className="flex items-center gap-2 mb-6">
+          <div className="w-10 h-10 bg-light-100 rounded-xl flex items-center justify-center border border-light-200">
+            <svg className="w-5 h-5 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-light-800">市场情绪指标</h3>
+            <p className="text-xs text-light-400">交易所持仓 & 市场情绪</p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-base font-semibold text-light-900">市场情绪指标</h3>
-          <p className="text-xs text-light-400">交易所持仓 & 市场情绪</p>
-        </div>
-      </div>
-      
-      {/* 指标内容 */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* 多空人数比 */}
-        <MetricCard
-          label="多空人数比"
-          value={data.longShortRatio}
-          color={getLongShortColor(data.longShortRatio)}
-        />
         
-        {/* 资金费率 */}
-        <MetricCard
-          label="资金费率 (年化)"
-          value={data.fundingRate}
-          unit="%"
-          color={getFundingRateColor(data.fundingRate)}
-        />
-        
-        {/* 恐慌贪婪指数仪表盘 */}
-        <div className="lg:col-span-2 flex justify-center lg:justify-start">
-          <FearGreedGauge 
-            value={data.fearGreedIndex} 
-            label={data.fearGreedLabel} 
+        {/* 指标内容 */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          {/* 多空人数比 */}
+          <MetricCard
+            label="多空人数比"
+            value={data.longShortRatio}
+            color={getLongShortColor(data.longShortRatio)}
           />
+          
+          {/* 资金费率 */}
+          <MetricCard
+            label="资金费率 (年化)"
+            value={data.fundingRate}
+            unit="%"
+            color={getFundingRateColor(data.fundingRate)}
+          />
+          
+          {/* 恐慌贪婪指数仪表盘 */}
+          <div className="lg:col-span-2 flex justify-center lg:justify-start">
+            <FearGreedGauge 
+              value={data.fearGreedIndex} 
+              label={data.fearGreedLabel} 
+            />
+          </div>
         </div>
-      </div>
-      
-      {/* 提示信息 */}
-      <div className="mt-4 pt-4 border-t border-dark-600">
-        <div className="flex flex-wrap gap-4 text-xs text-light-400">
-          <span><span className="text-accent-red">多头占优</span> → 警惕回调风险</span>
-          <span><span className="text-accent-green">空头占优</span> → 可能反弹</span>
-          <span><span className="text-accent-green">负费率</span> → 持仓可获利息</span>
+        
+        {/* 提示信息 */}
+        <div className="mt-6 pt-6 border-t border-light-200/50">
+          <div className="flex flex-wrap gap-4 text-xs text-light-400">
+            <span><span className="text-accent-red">多头占优</span> → 警惕回调风险</span>
+            <span><span className="text-accent-green">空头占优</span> → 可能反弹</span>
+            <span><span className="text-accent-green">负费率</span> → 持仓可获利息</span>
+          </div>
         </div>
       </div>
     </div>
