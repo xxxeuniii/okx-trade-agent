@@ -227,15 +227,6 @@ const getGaugeColor = (signal: string, confidence: number): string => {
 };
 
 /**
- * 生成唯一ID
- */
-let gaugeIdCounter = 0;
-const generateGaugeId = () => {
-  gaugeIdCounter += 1;
-  return `gauge-${gaugeIdCounter}`;
-};
-
-/**
  * 仪表盘组件
  * 
  * 展示半圆形仪表盘，包含指针和颜色渐变
@@ -244,38 +235,26 @@ const GaugeIndicator = ({ signal, confidence }: { signal: string; confidence: nu
   const angle = getGaugeAngle(signal, confidence);
   const color = getGaugeColor(signal, confidence);
   const confidencePercent = Math.round(confidence * 100);
-  const gaugeId = generateGaugeId();
   
   const signalText = signal === 'BUY' ? '买入' : signal === 'SELL' ? '卖出' : '中性';
-  const gradientId = `${gaugeId}-gradient`;
-  const filterId = `${gaugeId}-glow`;
   
   return (
-    <div className="relative w-48 h-44">
-      {/* 标签区域 - 顶部 */}
-      <div className="absolute top-0 left-0 right-0 text-center pt-2">
-        <div className="flex justify-between px-2">
-          <span className="text-xs text-accent-red font-semibold">强卖</span>
-          <span className="text-xs text-accent-green font-semibold">强买</span>
-        </div>
+    <div className="w-48 h-44 flex flex-col items-center">
+      {/* 顶部标签 */}
+      <div className="w-full flex justify-between px-2 mb-2">
+        <span className="text-xs text-accent-red font-semibold">强卖</span>
+        <span className="text-xs text-accent-green font-semibold">强买</span>
       </div>
       
-      {/* 半圆形仪表盘 */}
-      <svg viewBox="0 0 200 110" className="w-full h-28 mt-6">
-        {/* 渐变背景圆弧 */}
+      {/* 半圆形仪表盘 SVG */}
+      <svg viewBox="0 0 200 110" className="w-full h-28">
+        {/* 渐变定义 */}
         <defs>
-          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+          <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#96002c" />
             <stop offset="33%" stopColor="#d4a574" />
             <stop offset="100%" stopColor="#006432" />
           </linearGradient>
-          <filter id={filterId}>
-            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-            <feMerge>
-              <feMergeNode in="coloredBlur"/>
-              <feMergeNode in="SourceGraphic"/>
-            </feMerge>
-          </filter>
         </defs>
         
         {/* 仪表盘外边框 */}
@@ -291,7 +270,7 @@ const GaugeIndicator = ({ signal, confidence }: { signal: string; confidence: nu
         <path
           d="M 10 100 A 90 90 0 0 1 190 100"
           fill="none"
-          stroke={`url(#${gradientId})`}
+          stroke="url(#gaugeGradient)"
           strokeWidth="10"
           strokeLinecap="round"
         />
@@ -318,37 +297,21 @@ const GaugeIndicator = ({ signal, confidence }: { signal: string; confidence: nu
         })}
         
         {/* 指针 */}
-        <g transform={`rotate(${angle}, 100, 100)`} filter={`url(#${filterId})`}>
+        <g transform={`rotate(${angle}, 100, 100)`}>
           <line
-            x1="100"
-            y1="100"
-            x2="100"
-            y2="30"
-            stroke={color}
-            strokeWidth="4"
-            strokeLinecap="round"
+            x1="100" y1="100" x2="100" y2="30"
+            stroke={color} strokeWidth="4" strokeLinecap="round"
           />
-          {/* 指针末端圆球 */}
-          <circle
-            cx="100"
-            cy="30"
-            r="8"
-            fill={color}
-          />
+          <circle cx="100" cy="30" r="8" fill={color} />
         </g>
         
         {/* 中心点 */}
-        <circle
-          cx="100"
-          cy="100"
-          r="8"
-          fill={color}
-        />
+        <circle cx="100" cy="100" r="8" fill={color} />
       </svg>
       
-      {/* 标签区域 - 底部 */}
-      <div className="absolute bottom-2 left-0 right-0 text-center">
-        <p className="text-xs text-light-400 mb-1">AI交易信号</p>
+      {/* 底部标签 */}
+      <div className="text-center mt-1">
+        <p className="text-xs text-light-400">AI交易信号</p>
         <p className="text-xl font-bold" style={{ color }}>{signalText}</p>
         <p className="text-lg font-semibold text-light-700">{confidencePercent}%</p>
         <p className="text-xs text-light-400">置信度</p>
