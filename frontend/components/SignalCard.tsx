@@ -1,39 +1,65 @@
+/**
+ * 交易信号卡片组件
+ * 
+ * 展示AI生成的交易信号，包含价格信息、技术指标、支撑阻力位和分析依据。
+ */
+
+/**
+ * 技术指标接口定义
+ */
 interface Indicators {
-  sma_7?: number;
-  sma_20?: number;
-  sma_50?: number;
-  ema_12?: number;
-  ema_26?: number;
-  macd?: number;
-  macd_signal?: number;
-  rsi?: number;
-  bollinger_upper?: number;
-  bollinger_middle?: number;
-  bollinger_lower?: number;
-  volume_change?: number;
-  volatility?: number;
+  sma_7?: number;           // 7日简单移动平均线
+  sma_20?: number;          // 20日简单移动平均线
+  sma_50?: number;          // 50日简单移动平均线
+  ema_12?: number;          // 12日指数移动平均线
+  ema_26?: number;          // 26日指数移动平均线
+  macd?: number;            // MACD线
+  macd_signal?: number;     // MACD信号线
+  rsi?: number;             // 相对强弱指标
+  bollinger_upper?: number; // 布林带上轨
+  bollinger_middle?: number;// 布林带中轨
+  bollinger_lower?: number; // 布林带下轨
+  volume_change?: number;   // 成交量变化率
+  volatility?: number;      // 价格波动率
 }
 
+/**
+ * 信号响应接口
+ */
 interface SignalResponse {
-  symbol: string;
-  price: number;
-  change24h: number;
-  signal: 'BUY' | 'SELL' | 'NEUTRAL';
-  confidence: number;
-  reason: string[];
-  indicators?: Indicators;
+  symbol: string;           // 币种代码
+  price: number;            // 当前价格
+  change24h: number;        // 24小时涨跌幅
+  signal: 'BUY' | 'SELL' | 'NEUTRAL';  // 交易信号类型
+  confidence: number;       // 置信度(0-1)
+  reason: string[];         // 分析原因列表
+  indicators?: Indicators;  // 技术指标数据
 }
 
+/**
+ * 组件属性接口
+ */
 interface SignalCardProps {
-  data: SignalResponse;
+  data: SignalResponse;     // 信号数据
 }
 
+/**
+ * 价格水平接口
+ */
 interface PriceLevel {
-  level: string;
-  price: number;
-  type: 'support' | 'resistance';
+  level: string;                    // 水平名称（如布林带下轨、7日均线）
+  price: number;                    // 价格值
+  type: 'support' | 'resistance';   // 类型：支撑位或阻力位
 }
 
+/**
+ * 计算支撑位和阻力位
+ * 
+ * 基于布林带和均线指标计算关键价格水平。
+ * 
+ * @param data - 信号响应数据
+ * @returns 价格水平列表（按价格升序排列）
+ */
 const calculatePriceLevels = (data: SignalResponse): PriceLevel[] => {
   const levels: PriceLevel[] = [];
   const { price, indicators } = data;
@@ -57,42 +83,36 @@ const calculatePriceLevels = (data: SignalResponse): PriceLevel[] => {
     });
   }
   
-  // 基于均线计算支撑和阻力
+  // 基于均线计算支撑和阻力（价格上方为阻力，下方为支撑）
   if (indicators.sma_7) {
-    if (price < indicators.sma_7) {
-      levels.push({
-        level: '7日均线',
-        price: indicators.sma_7,
-        type: 'resistance'
-      });
-    } else {
-      levels.push({
-        level: '7日均线',
-        price: indicators.sma_7,
-        type: 'support'
-      });
-    }
+    levels.push({
+      level: '7日均线',
+      price: indicators.sma_7,
+      type: price < indicators.sma_7 ? 'resistance' : 'support'
+    });
   }
   
   if (indicators.sma_20) {
-    if (price < indicators.sma_20) {
-      levels.push({
-        level: '20日均线',
-        price: indicators.sma_20,
-        type: 'resistance'
-      });
-    } else {
-      levels.push({
-        level: '20日均线',
-        price: indicators.sma_20,
-        type: 'support'
-      });
-    }
+    levels.push({
+      level: '20日均线',
+      price: indicators.sma_20,
+      type: price < indicators.sma_20 ? 'resistance' : 'support'
+    });
   }
   
+  // 按价格升序排列
   return levels.sort((a, b) => a.price - b.price);
 };
 
+/**
+ * 获取信号样式配置
+ * 
+ * 根据信号类型和置信度返回对应的样式类名。
+ * 
+ * @param signal - 信号类型
+ * @param confidence - 置信度
+ * @returns 样式配置对象
+ */
 const getSignalStyles = (signal: string, confidence: number) => {
   switch (signal) {
     case 'BUY':
@@ -122,6 +142,12 @@ const getSignalStyles = (signal: string, confidence: number) => {
   }
 };
 
+/**
+ * 获取置信度等级描述
+ * 
+ * @param confidence - 置信度值
+ * @returns 包含等级文本和颜色的对象
+ */
 const getConfidenceLevel = (confidence: number) => {
   if (confidence >= 0.8) return { text: '极高', color: 'text-accent-green' };
   if (confidence >= 0.6) return { text: '高', color: 'text-accent-green' };
@@ -129,6 +155,12 @@ const getConfidenceLevel = (confidence: number) => {
   return { text: '低', color: 'text-accent-red' };
 };
 
+/**
+ * 获取RSI状态
+ * 
+ * @param rsi - RSI值
+ * @returns 包含显示文本、颜色和状态描述的对象
+ */
 const getRsiStatus = (rsi?: number) => {
   if (!rsi) return { text: '--', color: 'text-light-400', status: '' };
   if (rsi < 30) return { text: rsi.toFixed(1), color: 'text-accent-green', status: '超卖' };
@@ -136,6 +168,13 @@ const getRsiStatus = (rsi?: number) => {
   return { text: rsi.toFixed(1), color: 'text-accent-blue', status: '中性' };
 };
 
+/**
+ * 获取MACD状态
+ * 
+ * @param macd - MACD值
+ * @param signal - MACD信号线值
+ * @returns 包含显示文本和状态描述的对象
+ */
 const getMacdStatus = (macd?: number, signal?: number) => {
   if (!macd || !signal) return { text: '--', status: '' };
   const diff = macd - signal;
@@ -143,16 +182,21 @@ const getMacdStatus = (macd?: number, signal?: number) => {
   return { text: macd.toFixed(4), status: '死叉' };
 };
 
+/**
+ * 指标卡片组件
+ * 
+ * 展示单个技术指标的值和状态。
+ */
 const IndicatorCard = ({ 
   label, 
   value, 
   status, 
   color 
 }: { 
-  label: string; 
-  value: string; 
-  status?: string;
-  color?: string;
+  label: string;       // 指标名称
+  value: string;       // 指标值
+  status?: string;     // 状态标签（如超买、金叉）
+  color?: string;      // 文字颜色类名
 }) => (
   <div className="bg-light-50/50 rounded-xl p-3">
     <p className="text-xs text-light-400 mb-1">{label}</p>
@@ -173,7 +217,11 @@ const IndicatorCard = ({
   </div>
 );
 
+/**
+ * 主组件 - 交易信号卡片
+ */
 export default function SignalCard({ data }: SignalCardProps) {
+  // 获取样式配置
   const signalStyles = getSignalStyles(data.signal, data.confidence);
   const confidenceLevel = getConfidenceLevel(data.confidence);
   const rsiStatus = getRsiStatus(data.indicators?.rsi);
@@ -183,8 +231,10 @@ export default function SignalCard({ data }: SignalCardProps) {
   return (
     <div className={`glass-card rounded-2xl overflow-hidden ${signalStyles.glow}`}>
       <div className={`bg-gradient-to-br ${signalStyles.gradient} p-8`}>
+        {/* 头部区域：币种信息和信号 */}
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
           <div className="flex-1">
+            {/* 币种标识 */}
             <div className="flex items-center gap-4 mb-6">
               <div className="w-14 h-14 bg-light-100 rounded-xl flex items-center justify-center border border-light-200">
                 <span className="text-2xl font-bold text-light-700">{data.symbol}</span>
@@ -195,6 +245,7 @@ export default function SignalCard({ data }: SignalCardProps) {
               </div>
             </div>
             
+            {/* 价格显示 */}
             <div className="flex items-end gap-4 mb-6">
               <div className="w-64">
                 <p className="text-sm text-light-400 mb-1">当前价格</p>
@@ -209,6 +260,7 @@ export default function SignalCard({ data }: SignalCardProps) {
             </div>
           </div>
 
+          {/* 信号徽章 */}
           <div className="lg:w-48">
             <div className={`text-center p-6 rounded-2xl border ${signalStyles.badge}`}>
               <p className="text-sm text-light-400 mb-2">AI交易信号</p>
@@ -283,7 +335,7 @@ export default function SignalCard({ data }: SignalCardProps) {
           </div>
         </div>
 
-        {/* 买点/卖点区域 */}
+        {/* 支撑位与阻力位区域 */}
         <div className="mt-8 pt-6 border-t border-light-200/50">
           <div className="flex items-center gap-2 mb-4">
             <svg className="w-5 h-5 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -292,7 +344,7 @@ export default function SignalCard({ data }: SignalCardProps) {
             <h4 className="font-semibold text-light-800">支撑位与阻力位</h4>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* 买点（支撑位） */}
+            {/* 支撑位 */}
             <div className="bg-accent-green/5 rounded-xl p-4 border border-accent-green/20">
               <div className="flex items-center gap-2 mb-3">
                 <svg className="w-5 h-5 text-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -315,7 +367,7 @@ export default function SignalCard({ data }: SignalCardProps) {
               </div>
             </div>
 
-            {/* 卖点（阻力位） */}
+            {/* 阻力位 */}
             <div className="bg-accent-red/5 rounded-xl p-4 border border-accent-red/20">
               <div className="flex items-center gap-2 mb-3">
                 <svg className="w-5 h-5 text-accent-red" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -340,7 +392,7 @@ export default function SignalCard({ data }: SignalCardProps) {
           </div>
         </div>
 
-        {/* AI分析原因 */}
+        {/* AI分析原因区域 */}
         <div className="mt-8 pt-6 border-t border-light-200/50">
           <div className="flex items-center gap-2 mb-4">
             <svg className="w-5 h-5 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">

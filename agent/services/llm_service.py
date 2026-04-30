@@ -1,40 +1,81 @@
+"""
+大语言模型服务模块 - 基于 LangChain
+
+使用 LangChain 框架封装大语言模型调用，提供交易信号分析和风险控制功能。
+"""
+
 import os
-from anthropic import Anthropic, APIError
-from typing import Optional
+from typing import Optional, Dict, Any
+from langchain_anthropic import ChatAnthropic
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from pydantic import BaseModel, Field
+
+
+class TradingSignal(BaseModel):
+    """
+    交易信号输出模型
+    用于指导 LangChain 解析大模型响应
+    """
+    signal: str = Field(description="交易信号，可选值: BUY、SELL、NEUTRAL")
+    confidence: float = Field(description="信号置信度，范围 0.0-1.0")
+    reason: list = Field(description="分析原因列表，包含3条详细原因")
+
+
+class RiskManagement(BaseModel):
+    """
+    风险控制输出模型
+    用于指导 LangChain 解析大模型响应
+    """
+    entryPrice: float = Field(description="建议入场价格")
+    stopLoss: float = Field(description="建议止损价格")
+    takeProfit: float = Field(description="建议止盈价格")
+    riskRewardRatio: float = Field(description="风险收益比")
+    positionSize: str = Field(description="建议仓位大小，可选值: 观望、轻仓、中仓")
+    maxLossPercent: float = Field(description="最大亏损百分比")
+    volatilityLevel: str = Field(description="波动率水平，可选值: 低、中、高、未知")
+    riskScore: int = Field(description="风险评分，范围 0-100")
+    notes: list = Field(description="执行提示列表")
+
 
 class LLMService:
     """
-    大语言模型服务类
-    用于接入智谱(GLM)大模型，生成交易信号分析
-    """
+    大语言模型服务类 - LangChain 实现
     
+    使用 LangChain 框架封装智谱(GLM)大模型，提供交易信号分析和风险控制功能。
+    """
+
     def __init__(self):
         """
         初始化LLM服务
-        从环境变量读取API配置
+        从环境变量读取API配置，使用 LangChain ChatAnthropic 封装
         """
-        # 从环境变量获取配置，支持多种环境变量名
+        # 从环境变量获取配置
         self.api_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")
         self.base_url = os.getenv("ANTHROPIC_BASE_URL", "https://open.bigmodel.cn/api/anthropic")
         self.model = os.getenv("ANTHROPIC_MODEL", "glm-4.5-flash")
-        self.client = None
+        self.llm = None
         
-        # 如果有API Key，初始化客户端
+        # 初始化 LangChain ChatAnthropic
         if self.api_key:
             try:
-                self.client = Anthropic(
-                    api_key=self.api_key,
-                    base_url=self.base_url
+                self.llm = ChatAnthropic(
+                    anthropic_api_key=self.api_key,
+                    base_url=self.base_url,
+                    model=self.model,
+                    temperature=0.7,
+                    max_tokens=2048
                 )
+                print(f"[INFO] LangChain ChatAnthropic initialized successfully, model: {self.model}")
             except Exception as e:
-                print(f"LLM客户端初始化失败: {e}")
-                self.client = None
+                print(f"[ERROR] LangChain initialization failed: {e}")
+                self.llm = None
         else:
-            print("警告：未设置 ANTHROPIC_API_KEY 环境变量，将使用本地规则生成信号")
-    
+            print("[WARN] ANTHROPIC_API_KEY not set, fallback to local rules")
+
     def generate_trading_signal(self, price_data: dict, indicators: dict) -> dict:
         """
-        调用大模型生成交易信号
+        使用 LangChain 调用大模型生成交易信号
         
         参数:
             price_data: 包含价格信息的字典
@@ -43,175 +84,68 @@ class LLMService:
         返回:
             包含信号类型、置信度和分析原因的字典
         """
-        # 如果客户端未初始化，直接使用本地规则
-        if not self.client:
+        # 如果 LangChain 未初始化，使用本地规则降级
+        if not self.llm:
             return self._get_fallback_signal(indicators)
             
         try:
-            # 构建提示词
-            prompt = self._build_prompt(price_data, indicators)
+            # 1. 构建输出解析器（使用 LangChain JsonOutputParser）
+            parser = JsonOutputParser(pydantic_object=TradingSignal)
             
-            # 调用大模型
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=2048,
-                temperature=0.7,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
-            )
+            # 2. 构建提示词模板
+            prompt = self._build_trading_signal_prompt(price_data, indicators, parser)
             
-            # 解析响应
-            return self._parse_response(response)
+            # 3. 创建 LangChain Chain（提示词 + LLM + 解析器）
+            chain = prompt | self.llm | parser
             
-        except APIError as e:
-            print(f"大模型调用失败: {e}")
-            return self._get_fallback_signal(indicators)
+            # 4. 执行 Chain 获取结果
+            result = chain.invoke({})
+            
+            # 5. 验证和处理结果
+            return self._validate_trading_signal(result)
+            
         except Exception as e:
-            print(f"LLM服务异常: {e}")
+            print(f"[ERROR] LangChain trading signal generation failed: {e}")
             return self._get_fallback_signal(indicators)
-    
+
     def generate_risk_management(self, price_data: dict, signal_data: dict) -> Optional[dict]:
         """
-        调用大模型生成风险控制方案。
-        风控不使用本地规则兜底；模型不可用或返回异常时返回 None。
-        """
-        if not self.client:
-            print("AI风控不可用：LLM客户端未初始化")
-            return None
-
-        try:
-            prompt = self._build_risk_prompt(price_data, signal_data)
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=2048,
-                temperature=0.4,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
-            )
-            return self._parse_risk_response(response)
-        except APIError as e:
-            print(f"AI风控模型调用失败: {e}")
-            return None
-        except Exception as e:
-            print(f"AI风控服务异常: {e}")
-            return None
-
-    def _build_risk_prompt(self, price_data: dict, signal_data: dict) -> str:
-        indicators = price_data.get("indicators", {}) or {}
-
-        def fmt(value, digits=2):
-            if value is None:
-                return "N/A"
-            try:
-                return f"{float(value):.{digits}f}"
-            except (TypeError, ValueError):
-                return "N/A"
-
-        prompt = f"""
-你是一位专业的加密货币交易风控分析师。请只基于给定市场数据、技术指标和AI交易信号，生成风险控制方案。
-
-重要要求：
-1. 风控结论必须由你综合判断，不要套用固定模板。
-2. 如果当前信号不适合开仓，可以将 positionSize 设为“观望”，但仍需要给出观察用的关键价格边界。
-3. 止损、止盈、仓位、风险评分需要结合支撑阻力、波动率、置信度和信号方向综合判断。
-4. 结果仅用于风险辅助，不要承诺收益。
-5. 只输出JSON，不要输出Markdown或解释文字。
-
-## 市场数据
-- 当前价格: {fmt(price_data.get("price"), 4)}
-- 24小时涨跌幅: {fmt(price_data.get("changePercent24h"), 2)}%
-
-## AI交易信号
-- signal: {signal_data.get("signal", "NEUTRAL")}
-- confidence: {fmt(signal_data.get("confidence"), 2)}
-- reason: {signal_data.get("reason", [])}
-
-## 技术指标
-- RSI(14): {fmt(indicators.get("rsi"), 2)}
-- MACD: {fmt(indicators.get("macd"), 4)}
-- MACD signal: {fmt(indicators.get("macd_signal"), 4)}
-- SMA 7: {fmt(indicators.get("sma_7"), 4)}
-- SMA 20: {fmt(indicators.get("sma_20"), 4)}
-- SMA 50: {fmt(indicators.get("sma_50"), 4)}
-- Bollinger upper: {fmt(indicators.get("bollinger_upper"), 4)}
-- Bollinger middle: {fmt(indicators.get("bollinger_middle"), 4)}
-- Bollinger lower: {fmt(indicators.get("bollinger_lower"), 4)}
-- Volume change: {fmt(indicators.get("volume_change"), 2)}%
-- Volatility: {fmt(indicators.get("volatility"), 2)}%
-
-## 输出JSON字段
-{{
-  "entryPrice": number,
-  "stopLoss": number,
-  "takeProfit": number,
-  "riskRewardRatio": number,
-  "positionSize": "观望" | "轻仓" | "中仓",
-  "maxLossPercent": number,
-  "volatilityLevel": "低" | "中" | "高" | "未知",
-  "riskScore": 0-100整数,
-  "notes": ["执行提示1", "执行提示2", "执行提示3"]
-}}
-"""
-        return prompt.strip()
-
-    def _parse_risk_response(self, response) -> Optional[dict]:
-        try:
-            import json
-            content = response.content[0].text
-            content = content.replace("```json", "").replace("```", "").strip()
-            result = json.loads(content)
-
-            required = [
-                "entryPrice",
-                "stopLoss",
-                "takeProfit",
-                "riskRewardRatio",
-                "positionSize",
-                "maxLossPercent",
-                "volatilityLevel",
-                "riskScore",
-                "notes",
-            ]
-            if any(field not in result for field in required):
-                raise ValueError("AI风控响应字段不完整")
-
-            if result["positionSize"] not in ["观望", "轻仓", "中仓"]:
-                result["positionSize"] = "观望"
-            if result["volatilityLevel"] not in ["低", "中", "高", "未知"]:
-                result["volatilityLevel"] = "未知"
-
-            for field in ["entryPrice", "stopLoss", "takeProfit", "riskRewardRatio", "maxLossPercent"]:
-                digits = 4 if field in ["entryPrice", "stopLoss", "takeProfit"] else 2
-                result[field] = round(float(result[field]), digits)
-
-            result["riskScore"] = int(max(0, min(100, float(result["riskScore"]))))
-            if not isinstance(result["notes"], list):
-                result["notes"] = [str(result["notes"])]
-            result["notes"] = [str(note) for note in result["notes"][:4]]
-
-            return result
-        except Exception as e:
-            print(f"AI风控响应解析失败: {e}")
-            return None
-
-    def _build_prompt(self, price_data: dict, indicators: dict) -> str:
-        """
-        构建大模型提示词
+        使用 LangChain 调用大模型生成风险控制方案
         
         参数:
-            price_data: 价格数据
-            indicators: 技术指标
+            price_data: 包含价格信息的字典
+            signal_data: 包含交易信号的字典
             
         返回:
-            格式化的提示词字符串
+            风险控制方案字典，模型不可用时返回 None
+        """
+        if not self.llm:
+            print("[WARN] AI risk management unavailable: LangChain not initialized")
+            return None
+
+        try:
+            # 1. 构建输出解析器
+            parser = JsonOutputParser(pydantic_object=RiskManagement)
+            
+            # 2. 构建提示词模板
+            prompt = self._build_risk_management_prompt(price_data, signal_data, parser)
+            
+            # 3. 创建 LangChain Chain
+            chain = prompt | self.llm | parser
+            
+            # 4. 执行 Chain 获取结果
+            result = chain.invoke({})
+            
+            # 5. 验证和处理结果
+            return self._validate_risk_management(result)
+            
+        except Exception as e:
+            print(f"[ERROR] LangChain risk management generation failed: {e}")
+            return None
+
+    def _build_trading_signal_prompt(self, price_data: dict, indicators: dict, parser: JsonOutputParser) -> ChatPromptTemplate:
+        """
+        构建交易信号分析的 LangChain 提示词模板
         """
         price = price_data.get("price", 0)
         change_percent = price_data.get("changePercent24h", 0)
@@ -225,27 +159,12 @@ class LLMService:
         bollinger_lower = indicators.get("bollinger_lower")
         volume_change = indicators.get("volume_change")
         volatility = indicators.get("volatility")
-        
-        prompt = f"""
-你是一位专业的加密货币量化交易分析师。请基于以下市场数据和技术指标，进行深度分析并给出精准的交易建议。
 
-## 当前市场数据
-- 当前价格: ${price:,.2f}
-- 24小时涨跌幅: {change_percent:+.2f}%
-
-## 技术指标
-- RSI(14): {rsi:.1f}
-- MACD: {macd:.4f}
-- MACD信号线: {macd_signal:.4f}
-- 7日均线: ${sma_7:.2f}
-- 20日均线: ${sma_20:.2f}
-- 布林带上轨: ${bollinger_upper:.2f}
-- 布林带下轨: ${bollinger_lower:.2f}
-- 成交量变化: {volume_change:+.1f}%
-- 波动率: {volatility:.2f}%
+        # 定义系统提示词
+        system_prompt = """
+你是一位专业的加密货币量化交易分析师。请基于给定的市场数据和技术指标，进行深度分析并给出精准的交易建议。
 
 ## 分析框架
-作为专业交易分析师，请按照以下框架进行分析：
 
 ### 买点判断条件（满足越多，买入信号越强）：
 1. RSI < 30（超卖区域）
@@ -270,49 +189,133 @@ class LLMService:
 1. **深度分析**：综合所有指标，判断当前市场处于什么阶段
 2. **信号判断**：给出明确的交易信号：BUY（买入）、SELL（卖出）或 NEUTRAL（观望）
 3. **置信度评估**：给出信号的置信度（0.0-1.0），需要考虑多指标的一致性
-4. **详细原因**：提供3条详细的分析原因，每条原因必须引用具体指标数据，并说明对买点/卖点的影响
-
-## 输出格式
-请使用JSON格式输出，包含以下字段：
-- "signal": "BUY" | "SELL" | "NEUTRAL"
-- "confidence": 0.0-1.0 的浮点数
-- "reason": 包含3条分析原因的列表
-
-## 示例输出
-{{
-    "signal": "BUY",
-    "confidence": 0.85,
-    "reason": [
-        "RSI(28.5)进入超卖区域，表明下跌动能衰竭，反弹概率增加",
-        "MACD(0.5234)上穿信号线(0.4891)形成金叉，看涨信号确认",
-        "价格($42,500)站上7日均线($42,100)，短期趋势由跌转升"
-    ]
-}}
-
-请直接输出JSON，不要包含其他内容。
+4. **详细原因**：提供3条详细的分析原因，每条原因必须引用具体指标数据
 """
-        
-        return prompt.strip()
-    
-    def _parse_response(self, response) -> dict:
+
+        # 定义用户提示词模板
+        user_prompt = """
+## 当前市场数据
+- 当前价格: ${price:,.2f}
+- 24小时涨跌幅: {change_percent:+.2f}%
+
+## 技术指标
+- RSI(14): {rsi:.1f}
+- MACD: {macd:.4f}
+- MACD信号线: {macd_signal:.4f}
+- 7日均线: ${sma_7:.2f}
+- 20日均线: ${sma_20:.2f}
+- 布林带上轨: ${bollinger_upper:.2f}
+- 布林带下轨: ${bollinger_lower:.2f}
+- 成交量变化: {volume_change:+.1f}%
+- 波动率: {volatility:.2f}%
+
+## 输出格式要求
+{format_instructions}
+"""
+
+        # 创建 ChatPromptTemplate
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt.strip()),
+            ("user", user_prompt)
+        ])
+
+        # 绑定格式指令和数据
+        return prompt.partial(
+            format_instructions=parser.get_format_instructions(),
+            price=price,
+            change_percent=change_percent,
+            rsi=rsi if rsi else 50,
+            macd=macd if macd else 0,
+            macd_signal=macd_signal if macd_signal else 0,
+            sma_7=sma_7 if sma_7 else 0,
+            sma_20=sma_20 if sma_20 else 0,
+            bollinger_upper=bollinger_upper if bollinger_upper else 0,
+            bollinger_lower=bollinger_lower if bollinger_lower else 0,
+            volume_change=volume_change if volume_change else 0,
+            volatility=volatility if volatility else 0
+        )
+
+    def _build_risk_management_prompt(self, price_data: dict, signal_data: dict, parser: JsonOutputParser) -> ChatPromptTemplate:
         """
-        解析大模型响应
-        
-        参数:
-            response: 大模型返回的响应对象
-            
-        返回:
-            解析后的交易信号字典
+        构建风险控制分析的 LangChain 提示词模板
+        """
+        indicators = price_data.get("indicators", {}) or {}
+
+        def fmt(value, digits=2):
+            if value is None:
+                return "N/A"
+            try:
+                return f"{float(value):.{digits}f}"
+            except (TypeError, ValueError):
+                return "N/A"
+
+        system_prompt = """
+你是一位专业的加密货币交易风控分析师。请只基于给定市场数据、技术指标和AI交易信号，生成风险控制方案。
+
+重要要求：
+1. 风控结论必须由你综合判断，不要套用固定模板
+2. 如果当前信号不适合开仓，可以将 positionSize 设为"观望"，但仍需要给出观察用的关键价格边界
+3. 止损、止盈、仓位、风险评分需要结合支撑阻力、波动率、置信度和信号方向综合判断
+4. 结果仅用于风险辅助，不要承诺收益
+"""
+
+        user_prompt = """
+## 市场数据
+- 当前价格: {price}
+- 24小时涨跌幅: {changePercent}%
+
+## AI交易信号
+- signal: {signal}
+- confidence: {confidence}
+- reason: {reason}
+
+## 技术指标
+- RSI(14): {rsi}
+- MACD: {macd}
+- MACD signal: {macd_signal}
+- SMA 7: {sma_7}
+- SMA 20: {sma_20}
+- SMA 50: {sma_50}
+- Bollinger upper: {bollinger_upper}
+- Bollinger middle: {bollinger_middle}
+- Bollinger lower: {bollinger_lower}
+- Volume change: {volume_change}%
+- Volatility: {volatility}%
+
+## 输出格式要求
+{format_instructions}
+"""
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt.strip()),
+            ("user", user_prompt)
+        ])
+
+        return prompt.partial(
+            format_instructions=parser.get_format_instructions(),
+            price=fmt(price_data.get("price"), 4),
+            changePercent=fmt(price_data.get("changePercent24h"), 2),
+            signal=signal_data.get("signal", "NEUTRAL"),
+            confidence=fmt(signal_data.get("confidence"), 2),
+            reason=str(signal_data.get("reason", [])),
+            rsi=fmt(indicators.get("rsi"), 2),
+            macd=fmt(indicators.get("macd"), 4),
+            macd_signal=fmt(indicators.get("macd_signal"), 4),
+            sma_7=fmt(indicators.get("sma_7"), 4),
+            sma_20=fmt(indicators.get("sma_20"), 4),
+            sma_50=fmt(indicators.get("sma_50"), 4),
+            bollinger_upper=fmt(indicators.get("bollinger_upper"), 4),
+            bollinger_middle=fmt(indicators.get("bollinger_middle"), 4),
+            bollinger_lower=fmt(indicators.get("bollinger_lower"), 4),
+            volume_change=fmt(indicators.get("volume_change"), 2),
+            volatility=fmt(indicators.get("volatility"), 2)
+        )
+
+    def _validate_trading_signal(self, result: Dict[str, Any]) -> dict:
+        """
+        验证和处理交易信号结果
         """
         try:
-            content = response.content[0].text
-            
-            # 尝试提取JSON部分
-            import json
-            # 移除可能存在的markdown代码块标记
-            content = content.replace("```json", "").replace("```", "").strip()
-            result = json.loads(content)
-            
             # 验证必要字段
             if "signal" not in result or "confidence" not in result or "reason" not in result:
                 raise ValueError("响应格式不完整")
@@ -324,24 +327,62 @@ class LLMService:
             # 限制置信度范围
             result["confidence"] = max(0.3, min(0.95, float(result["confidence"])))
             
+            # 确保原因列表格式正确
+            if not isinstance(result["reason"], list):
+                result["reason"] = [str(result["reason"])]
+            
+            # 确保有3条原因
+            while len(result["reason"]) < 3:
+                result["reason"].append("等待更多信号确认")
+            
             return result
             
-        except json.JSONDecodeError as e:
-            print(f"JSON解析失败: {e}")
-            return self._get_fallback_signal({})
         except Exception as e:
-            print(f"响应解析异常: {e}")
+            print(f"[ERROR] Trading signal validation failed: {e}")
             return self._get_fallback_signal({})
-    
+
+    def _validate_risk_management(self, result: Dict[str, Any]) -> Optional[dict]:
+        """
+        验证和处理风险控制结果
+        """
+        try:
+            required = [
+                "entryPrice", "stopLoss", "takeProfit", "riskRewardRatio",
+                "positionSize", "maxLossPercent", "volatilityLevel",
+                "riskScore", "notes"
+            ]
+            if any(field not in result for field in required):
+                raise ValueError("风控响应字段不完整")
+
+            # 验证枚举值
+            if result["positionSize"] not in ["观望", "轻仓", "中仓"]:
+                result["positionSize"] = "观望"
+            if result["volatilityLevel"] not in ["低", "中", "高", "未知"]:
+                result["volatilityLevel"] = "未知"
+
+            # 格式化数值字段
+            for field in ["entryPrice", "stopLoss", "takeProfit", "riskRewardRatio", "maxLossPercent"]:
+                digits = 4 if field in ["entryPrice", "stopLoss", "takeProfit"] else 2
+                result[field] = round(float(result[field]), digits)
+
+            # 限制风险评分范围
+            result["riskScore"] = int(max(0, min(100, float(result["riskScore"]))))
+            
+            # 确保notes是列表
+            if not isinstance(result["notes"], list):
+                result["notes"] = [str(result["notes"])]
+            result["notes"] = [str(note) for note in result["notes"][:4]]
+
+            return result
+            
+        except Exception as e:
+            print(f"[ERROR] Risk management validation failed: {e}")
+            return None
+
     def _get_fallback_signal(self, indicators: dict) -> dict:
         """
-        获取降级信号（当大模型调用失败时使用）
-        
-        参数:
-            indicators: 技术指标
-            
-        返回:
-            默认的交易信号
+        获取降级信号（当 LangChain 调用失败时使用）
+        基于本地规则生成交易信号
         """
         rsi = indicators.get("rsi")
         macd = indicators.get("macd")
@@ -385,17 +426,19 @@ class LLMService:
             "reason": reasons[:3]
         }
 
+
 # 创建单例实例
-llm_service = None
+_llm_service = None
+
 
 def get_llm_service() -> LLMService:
     """
     获取LLM服务单例
     
     返回:
-        LLMService实例
+        LLMService实例（基于LangChain实现）
     """
-    global llm_service
-    if llm_service is None:
-        llm_service = LLMService()
-    return llm_service
+    global _llm_service
+    if _llm_service is None:
+        _llm_service = LLMService()
+    return _llm_service
