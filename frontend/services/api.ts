@@ -158,7 +158,7 @@ export async function getRankings(): Promise<RankingItem[]> {
  * @returns Promise<Response> - 流式响应
  */
 export async function askAgentStream(input: string, chatHistory: Array<{ role: string; content: string }> = []): Promise<Response> {
-  return fetch('http://localhost:8081/api/v1/chat/stream', {
+  return fetch('http://localhost:8000/api/v1/chat/stream', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'

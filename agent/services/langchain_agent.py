@@ -5,7 +5,7 @@ LangChain Agent 服务模块 - 基于 LangChain 框架
 """
 
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Iterator
 from pydantic import BaseModel, Field
 
 # LangChain 核心组件

@@ -8,7 +8,7 @@ import axios from 'axios';
 
 // 创建axios实例
 const axiosInstance = axios.create({
-  baseURL: 'http://localhost:8081',
+  baseURL: 'http://localhost:8000',
   timeout: 30000, // 30秒超时
   headers: {
     'Content-Type': 'application/json',

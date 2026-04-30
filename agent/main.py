@@ -100,6 +100,71 @@ def rankings():
     return get_market_rankings()
 
 
+@app.get("/api/v1/multi-timeframe", summary="获取多周期趋势分析")
+def get_multi_timeframe(symbol: str = "BTC"):
+    """
+    获取多周期趋势分析数据
+    
+    参数:
+        symbol: 加密货币代码，默认 BTC
+        
+    返回:
+        包含多个时间周期趋势数据的对象
+    """
+    from agent import analyze_symbol
+    
+    timeframes = ["1H", "4H", "1D"]
+    results = []
+    
+    for tf in timeframes:
+        try:
+            analysis = analyze_symbol(symbol, tf)
+            signal = analysis.get("signal", "NEUTRAL")
+            confidence = analysis.get("confidence", 0.5)
+            
+            trend = "sideways"
+            if signal == "BUY":
+                trend = "bullish"
+            elif signal == "SELL":
+                trend = "bearish"
+            
+            # 根据置信度和周期计算强度
+            timeframe_weights = {"1H": 1.0, "4H": 0.85, "1D": 0.7}
+            strength = min(100, max(30, round(confidence * 100 * timeframe_weights.get(tf, 1.0))))
+            
+            results.append({
+                "timeframe": tf,
+                "trend": trend,
+                "strength": strength,
+                "signal": signal,
+                "confidence": confidence
+            })
+        except Exception as e:
+            # 如果某个周期失败，使用默认值
+            results.append({
+                "timeframe": tf,
+                "trend": "sideways",
+                "strength": 50,
+                "signal": "NEUTRAL",
+                "confidence": 0.5
+            })
+    
+    # 检查是否所有周期趋势一致
+    trends = [r["trend"] for r in results]
+    is_aligned = len(set(trends)) == 1
+    
+    # 计算置信度影响
+    avg_confidence = sum(r["confidence"] for r in results) / len(results)
+    confidence_impact = round(avg_confidence * 20)
+    
+    return {
+        "symbol": symbol,
+        "timeframes": results,
+        "is_aligned": is_aligned,
+        "confidence_impact": confidence_impact
+    }
+
+
 @app.get("/health", summary="健康检查")
 def health_check():
     """
