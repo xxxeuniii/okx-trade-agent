@@ -183,6 +183,165 @@ const getMacdStatus = (macd?: number, signal?: number) => {
 };
 
 /**
+ * 计算仪表盘角度
+ * 
+ * 根据信号类型和置信度计算指针角度（-90度到+90度）
+ * 
+ * @param signal - 信号类型
+ * @param confidence - 置信度
+ * @returns 指针角度（度）
+ */
+const getGaugeAngle = (signal: string, confidence: number): number => {
+  switch (signal) {
+    case 'BUY':
+      return 90 * confidence;  // 0 到 90度
+    case 'SELL':
+      return -90 * confidence; // -90 到 0度
+    default:
+      return 0; // 中性在中间
+  }
+};
+
+/**
+ * 获取仪表盘颜色
+ * 
+ * 根据信号类型和置信度返回颜色
+ * 
+ * @param signal - 信号类型
+ * @param confidence - 置信度
+ * @returns 颜色值
+ */
+const getGaugeColor = (signal: string, confidence: number): string => {
+  switch (signal) {
+    case 'BUY':
+      // 从黄色过渡到深绿色
+      const greenIntensity = Math.floor(50 + confidence * 100);
+      return `rgb(0, ${greenIntensity}, 50)`;
+    case 'SELL':
+      // 从黄色过渡到深红色
+      const redIntensity = Math.floor(50 + confidence * 100);
+      return `rgb(${redIntensity}, 0, 50)`;
+    default:
+      return '#d4a574'; // 中性黄色
+  }
+};
+
+/**
+ * 仪表盘组件
+ * 
+ * 展示半圆形仪表盘，包含指针和颜色渐变
+ */
+const GaugeIndicator = ({ signal, confidence }: { signal: string; confidence: number }) => {
+  const angle = getGaugeAngle(signal, confidence);
+  const color = getGaugeColor(signal, confidence);
+  const confidencePercent = Math.round(confidence * 100);
+  
+  const signalText = signal === 'BUY' ? '买入' : signal === 'SELL' ? '卖出' : '中性';
+  
+  return (
+    <div className="relative w-48 h-32">
+      {/* 半圆形背景 */}
+      <svg viewBox="0 0 200 100" className="w-full h-full">
+        {/* 渐变背景圆弧 */}
+        <defs>
+          <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#96002c" />
+            <stop offset="33%" stopColor="#d4a574" />
+            <stop offset="100%" stopColor="#006432" />
+          </linearGradient>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
+        
+        {/* 仪表盘外边框 */}
+        <path
+          d="M 10 95 A 90 90 0 0 1 190 95"
+          fill="none"
+          stroke="#e5e7eb"
+          strokeWidth="12"
+          strokeLinecap="round"
+        />
+        
+        {/* 渐变填充圆弧 */}
+        <path
+          d="M 10 95 A 90 90 0 0 1 190 95"
+          fill="none"
+          stroke="url(#gaugeGradient)"
+          strokeWidth="10"
+          strokeLinecap="round"
+        />
+        
+        {/* 刻度线 */}
+        {[-90, -60, -30, 0, 30, 60, 90].map((deg, i) => {
+          const rad = ((deg + 90) * Math.PI) / 180;
+          const x1 = 100 + 75 * Math.cos(rad);
+          const y1 = 95 - 75 * Math.sin(rad);
+          const x2 = 100 + 82 * Math.cos(rad);
+          const y2 = 95 - 82 * Math.sin(rad);
+          return (
+            <line
+              key={i}
+              x1={x1}
+              y1={y1}
+              x2={x2}
+              y2={y2}
+              stroke="#9ca3af"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          );
+        })}
+        
+        {/* 指针 */}
+        <g transform={`rotate(${angle}, 100, 95)`} filter="url(#glow)">
+          <line
+            x1="100"
+            y1="95"
+            x2="100"
+            y2="25"
+            stroke={color}
+            strokeWidth="4"
+            strokeLinecap="round"
+          />
+          {/* 指针末端圆球 */}
+          <circle
+            cx="100"
+            cy="25"
+            r="8"
+            fill={color}
+          />
+        </g>
+        
+        {/* 中心点 */}
+        <circle
+          cx="100"
+          cy="95"
+          r="8"
+          fill={color}
+        />
+      </svg>
+      
+      {/* 标签 */}
+      <div className="absolute bottom-0 left-0 right-0 text-center">
+        <div className="flex justify-between px-2 mb-1">
+          <span className="text-xs text-accent-red font-semibold">强卖</span>
+          <span className="text-xs text-accent-green font-semibold">强买</span>
+        </div>
+        <p className="text-sm text-light-400">AI交易信号</p>
+        <p className="text-xl font-bold" style={{ color }}>{signalText}</p>
+        <p className="text-lg font-semibold text-light-700">{confidencePercent}%</p>
+        <p className="text-xs text-light-400">置信度</p>
+      </div>
+    </div>
+  );
+};
+
+/**
  * 指标卡片组件
  * 
  * 展示单个技术指标的值和状态。
@@ -260,19 +419,9 @@ export default function SignalCard({ data }: SignalCardProps) {
             </div>
           </div>
 
-          {/* 信号徽章 */}
+          {/* 仪表盘指示器 */}
           <div className="lg:w-48">
-            <div className={`text-center p-6 rounded-2xl border ${signalStyles.badge}`}>
-              <p className="text-sm text-light-400 mb-2">AI交易信号</p>
-              <p className="text-3xl font-bold">{signalStyles.text}</p>
-              <div className="mt-4 pt-4 border-t border-current/20">
-                <p className="text-xs text-light-400 mb-1">置信度</p>
-                <p className={`text-2xl font-bold ${confidenceLevel.color}`}>
-                  {(data.confidence * 100).toFixed(0)}%
-                </p>
-                <span className={`text-xs ${confidenceLevel.color}`}>({confidenceLevel.text})</span>
-              </div>
-            </div>
+            <GaugeIndicator signal={data.signal} confidence={data.confidence} />
           </div>
         </div>
 

@@ -51,7 +51,7 @@ class LLMService:
         从环境变量读取API配置，使用 LangChain ChatAnthropic 封装
         """
         # 从环境变量获取配置
-        self.api_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")
+        self.api_key = os.getenv("ANTHROPIC_API_KEY") 
         self.base_url = os.getenv("ANTHROPIC_BASE_URL", "https://open.bigmodel.cn/api/anthropic")
         self.model = os.getenv("ANTHROPIC_MODEL", "glm-4.5-flash")
         self.llm = None
