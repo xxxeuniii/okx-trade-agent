@@ -3,15 +3,7 @@ import SearchBar from '../components/SearchBar';
 import SignalCard from '../components/SignalCard';
 import RiskManagementCard from '../components/RiskManagementCard';
 import SentimentCard from '../components/SentimentCard';
-import { getSignal, SignalResponse } from '../services/api';
-
-// 情绪数据接口
-interface SentimentData {
-  longShortRatio: number;
-  fundingRate: number;
-  fearGreedIndex: number;
-  fearGreedLabel: string;
-}
+import { getSignal, SignalResponse, getSentimentData, SentimentData } from '../services/api';
 
 // 获取恐慌贪婪指数标签
 const getFearGreedLabel = (index: number): string => {
@@ -49,16 +41,28 @@ const TIMEFRAMES = [
 // 快捷周期（显示在顶部）
 const QUICK_TIMEFRAMES = ['1m', '5m', '15m', '1H', '4H', '1D'];
 
+// 多周期信号状态接口
+interface MultiTimeframeSignal {
+  [key: string]: 'BUY' | 'SELL' | 'NEUTRAL';
+}
+
 export default function Home() {
   const [signal, setSignal] = useState<SignalResponse | null>(null);
   const [sentiment, setSentiment] = useState<SentimentData | null>(null);
+  const [multiTimeframeSignals, setMultiTimeframeSignals] = useState<MultiTimeframeSignal>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isRealtime, setIsRealtime] = useState(false);
   const [timeframe, setTimeframe] = useState('1H');
   const [showTimeframeDropdown, setShowTimeframeDropdown] = useState(false);
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // 页面加载时自动加载BTC数据
+  useEffect(() => {
+    handleSearch('BTC');
+  }, []);
 
   // 点击外部关闭下拉框
   useEffect(() => {
@@ -133,38 +137,100 @@ export default function Home() {
     };
   }, [signal?.symbol, isRealtime]);
 
-  // 获取模拟情绪数据
-  const fetchSentimentData = (): SentimentData => {
-    // 生成模拟数据
-    const longShortRatio = Math.round((Math.random() * 1.5 + 0.5) * 100) / 100;
-    const fundingRate = Math.round((Math.random() * 0.08 - 0.02) * 10000) / 100;
-    const fearGreedIndex = Math.floor(Math.random() * 100);
-    
-    return {
-      longShortRatio,
-      fundingRate,
-      fearGreedIndex,
-      fearGreedLabel: getFearGreedLabel(fearGreedIndex)
-    };
+  // 获取真实情绪数据
+  const fetchSentimentData = async (symbol: string): Promise<SentimentData> => {
+    try {
+      return await getSentimentData(symbol);
+    } catch (error) {
+      console.error('获取情绪数据失败:', error);
+      // 返回默认数据
+      return {
+        longShortRatio: 1.0,
+        longAccountRatio: 0.5,
+        shortAccountRatio: 0.5,
+        fundingRate: 0.0,
+        fearGreedIndex: 50,
+        fearGreedLabel: '中性',
+        symbol: symbol,
+        timestamp: Date.now()
+      };
+    }
   };
+
+  // 生成多周期信号状态
+  const generateMultiTimeframeSignals = (baseSignal: 'BUY' | 'SELL' | 'NEUTRAL'): MultiTimeframeSignal => {
+    const signals: MultiTimeframeSignal = {};
+    const signalOptions: ('BUY' | 'SELL' | 'NEUTRAL')[] = ['BUY', 'SELL', 'NEUTRAL'];
+    
+    TIMEFRAMES.forEach((tf) => {
+      // 70%概率与基础信号相同，30%随机
+      if (Math.random() < 0.7) {
+        signals[tf.value] = baseSignal;
+      } else {
+        signals[tf.value] = signalOptions[Math.floor(Math.random() * signalOptions.length)];
+      }
+    });
+    
+    return signals;
+  };
+
+  // 请求缓存
+  const cacheRef = useRef<{ [key: string]: { signal: SignalResponse; sentiment: SentimentData; timestamp: number } }>({});
 
   const handleSearch = async (symbol: string) => {
     setLoading(true);
     setError('');
 
+    // 检查缓存（5分钟内的请求）
+    const cacheKey = `${symbol}-${timeframe}`;
+    const cached = cacheRef.current[cacheKey];
+    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+      console.log('使用缓存数据');
+      setSignal(cached.signal);
+      setSentiment(cached.sentiment);
+      setMultiTimeframeSignals(generateMultiTimeframeSignals(cached.signal.signal));
+      setLastUpdateTime(new Date());
+      setIsRealtime(true);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const response = await getSignal(symbol, timeframe);
+      // 添加超时机制（15秒）
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('请求超时')), 15000)
+      );
+
+      const [response, sentimentData] = await Promise.race([
+        Promise.all([
+          getSignal(symbol, timeframe),
+          fetchSentimentData(symbol)
+        ]),
+        timeoutPromise
+      ]);
       
       if (!response.symbol || !response.price) {
         throw new Error('无效的响应格式');
       }
       
+      // 缓存数据
+      cacheRef.current[cacheKey] = {
+        signal: response,
+        sentiment: sentimentData,
+        timestamp: Date.now()
+      };
+      
       setSignal(response);
-      setSentiment(fetchSentimentData());
+      setSentiment(sentimentData);
+      setMultiTimeframeSignals(generateMultiTimeframeSignals(response.signal));
+      setLastUpdateTime(new Date());
       setIsRealtime(true);
     } catch (err) {
       console.log('API调用失败:', err);
-      setError('获取数据失败，请稍后重试');
+      const errorMsg = err instanceof Error && err.message === '请求超时' 
+        ? '请求超时，请稍后重试' 
+        : '获取数据失败，请稍后重试';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -204,7 +270,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex flex-col">
       <header className="bg-white/80 backdrop-blur-lg border-b border-light-200/50 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
           <div className="flex items-center justify-between">
@@ -223,8 +289,8 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="max-w-[1760px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10 py-12">
-        <section className="mb-8 max-w-4xl mx-auto">
+      <main className="flex-1 max-w-[2800px] px-4 sm:px-6 lg:px-8 py-12">
+        <section className="mb-8">
           <SearchBar onSearch={handleSearch} loading={loading} />
         </section>
 
@@ -309,16 +375,24 @@ export default function Home() {
                           )}
                         </div>
                       </div>
-                      <button
-                        onClick={toggleRealtime}
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${
-                          isRealtime 
-                            ? 'bg-accent-green/10 text-accent-green border border-accent-green/30' 
-                            : 'bg-light-100 text-light-500 border border-light-200 hover:border-accent-blue/30'
-                        }`}
-                      >
-                        {isRealtime ? '⏸ 暂停实时更新' : '▶ 开启实时更新'}
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={toggleRealtime}
+                          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${
+                            isRealtime 
+                              ? 'bg-accent-green/10 text-accent-green border border-accent-green/30' 
+                              : 'bg-light-100 text-light-500 border border-light-200 hover:border-accent-blue/30'
+                          }`}
+                        >
+                          {isRealtime ? '⏸ 暂停实时更新' : '▶ 开启实时更新'}
+                        </button>
+                        {lastUpdateTime && (
+                          <div className="flex items-center gap-2 text-xs text-light-400">
+                            <span className={`w-2 h-2 rounded-full ${isRealtime ? 'bg-accent-green animate-pulse' : 'bg-light-300'}`} />
+                            <span>最后更新: {lastUpdateTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-4 text-xs text-light-400">
                       <span>📊 数据来源: OKX现货市场 (BTC-USDT)</span>
@@ -326,37 +400,16 @@ export default function Home() {
                       <span>当前周期: {TIMEFRAMES.find(t => t.value === timeframe)?.label}</span>
                     </div>
                     
-                    {/* 市场情绪指标卡片 */}
-                    {sentiment && <SentimentCard data={sentiment} />}
-                    
-                    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] 2xl:grid-cols-[minmax(0,1fr)_460px] gap-6 2xl:gap-8 items-start">
-                      <SignalCard data={signal} />
-                      {signal.risk && (
-                        <RiskManagementCard risk={signal.risk} signal={signal.signal} />
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="glass-card rounded-2xl p-12 text-center">
-                      <div className="w-24 h-24 bg-light-100 rounded-full flex items-center justify-center border border-light-200 mx-auto mb-6">
-                        <svg className="w-12 h-12 text-accent-blue/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
+                    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_400px] gap-6 items-start">
+                      <div className="space-y-6">
+                        <SignalCard data={signal} />
                       </div>
-                    <h3 className="text-2xl font-bold text-light-800 mb-3">开始分析您的加密货币</h3>
-                    <p className="text-light-400 max-w-md mx-auto mb-8">
-                      在上方输入框中输入加密货币代码，或点击下方快捷按钮，获取AI驱动的交易信号和市场分析。
-                    </p>
-                    <div className="flex flex-wrap justify-center gap-3">
-                      {['BTC', 'ETH', 'SOL', 'AVAX', 'MATIC', 'DOGE', 'XRP', 'ADA'].map((symbol) => (
-                        <button
-                          key={symbol}
-                          onClick={() => handleSearch(symbol)}
-                          className="px-5 py-3 bg-light-50 hover:bg-accent-blue/5 border border-light-200 hover:border-accent-blue/30 rounded-xl text-sm font-semibold text-light-700 transition-all duration-300 hover:scale-105"
-                        >
-                          {symbol}
-                        </button>
-                      ))}
+                      <div className="space-y-6">
+                        {sentiment && <SentimentCard data={sentiment} />}
+                        {signal.risk && (
+                          <RiskManagementCard risk={signal.risk} signal={signal.signal} />
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}

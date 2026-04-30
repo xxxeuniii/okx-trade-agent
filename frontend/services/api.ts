@@ -86,7 +86,7 @@ export interface ChatResponse {
  * @returns Promise<SignalResponse> - 包含信号和分析数据的响应
  */
 export async function getSignal(symbol: string, timeframe: string = "1H"): Promise<SignalResponse> {
-  const res = await fetch("http://localhost:8000/api/v1/analysis", {
+  const res = await fetch("http://localhost:8081/api/v1/analysis", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -117,6 +117,47 @@ export async function askAgent(input: string): Promise<ChatResponse> {
     success: data.success,
     response: data.response || data.error || "暂无回复",
     error: data.error
+  };
+}
+
+/**
+ * 情绪数据接口定义
+ */
+export interface SentimentData {
+  longShortRatio: number;       // 多空比
+  longAccountRatio: number;     // 多头账户占比
+  shortAccountRatio: number;    // 空头账户占比
+  fundingRate: number;          // 资金费率(%)
+  fearGreedIndex: number;       // 恐慌贪婪指数(0-100)
+  fearGreedLabel: string;       // 恐慌贪婪标签
+  symbol: string;               // 币种代码
+  timestamp: number;            // 时间戳
+}
+
+/**
+ * 获取市场情绪数据
+ * 
+ * @param symbol - 加密货币代码，默认 "BTC"
+ * @returns Promise<SentimentData> - 情绪数据响应
+ */
+export async function getSentimentData(symbol: string = "BTC"): Promise<SentimentData> {
+  const res = await fetch(`http://localhost:8081/api/v1/sentiment?symbol=${symbol}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json"
+    }
+  });
+
+  const data = await res.json();
+  return data.data || {
+    longShortRatio: 1.0,
+    longAccountRatio: 0.5,
+    shortAccountRatio: 0.5,
+    fundingRate: 0.0,
+    fearGreedIndex: 50,
+    fearGreedLabel: "中性",
+    symbol: symbol,
+    timestamp: Date.now()
   };
 }
 

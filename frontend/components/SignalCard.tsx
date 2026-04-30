@@ -227,6 +227,21 @@ const getGaugeColor = (signal: string, confidence: number): string => {
 };
 
 /**
+ * 计算距离下一周期收盘的剩余时间
+ */
+const getTimeToClose = (): string => {
+  const now = new Date();
+  const minutes = now.getMinutes();
+  const seconds = now.getSeconds();
+  
+  // 计算到下一小时的剩余时间（假设当前是1H周期）
+  const minutesToClose = 60 - minutes - 1;
+  const secondsToClose = 60 - seconds;
+  
+  return `${String(minutesToClose).padStart(2, '0')}:${String(secondsToClose).padStart(2, '0')}`;
+};
+
+/**
  * 仪表盘组件
  * 
  * 展示半圆形仪表盘，包含指针和颜色渐变
@@ -235,20 +250,28 @@ const GaugeIndicator = ({ signal, confidence }: { signal: string; confidence: nu
   const angle = getGaugeAngle(signal, confidence);
   const color = getGaugeColor(signal, confidence);
   const confidencePercent = Math.round(confidence * 100);
+  const timeToClose = getTimeToClose();
   
   const signalText = signal === 'BUY' ? '买入' : signal === 'SELL' ? '卖出' : '中性';
   
   return (
-    <div className="w-48 h-44 flex flex-col items-center">
+    <div className="w-48 h-48 flex flex-col items-center">
       {/* 顶部标签 */}
-      <div className="w-full flex justify-between px-2 mb-2">
+      <div className="w-full flex justify-between px-2 mb-1">
         <span className="text-xs text-accent-red font-semibold">强卖</span>
         <span className="text-xs text-accent-green font-semibold">强买</span>
       </div>
       
+      {/* 剩余时间提示 */}
+      <div className="flex items-center gap-1 mb-1">
+        <svg className="w-3 h-3 text-accent-blue animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+        </svg>
+        <span className="text-xs text-light-400">距离收盘 {timeToClose}</span>
+      </div>
+      
       {/* 半圆形仪表盘 SVG */}
       <svg viewBox="0 0 200 110" className="w-full h-28">
-        {/* 渐变定义 */}
         <defs>
           <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#96002c" />
@@ -257,23 +280,8 @@ const GaugeIndicator = ({ signal, confidence }: { signal: string; confidence: nu
           </linearGradient>
         </defs>
         
-        {/* 仪表盘外边框 */}
-        <path
-          d="M 10 100 A 90 90 0 0 1 190 100"
-          fill="none"
-          stroke="#e5e7eb"
-          strokeWidth="12"
-          strokeLinecap="round"
-        />
-        
-        {/* 渐变填充圆弧 */}
-        <path
-          d="M 10 100 A 90 90 0 0 1 190 100"
-          fill="none"
-          stroke="url(#gaugeGradient)"
-          strokeWidth="10"
-          strokeLinecap="round"
-        />
+        <path d="M 10 100 A 90 90 0 0 1 190 100" fill="none" stroke="#e5e7eb" strokeWidth="12" strokeLinecap="round" />
+        <path d="M 10 100 A 90 90 0 0 1 190 100" fill="none" stroke="url(#gaugeGradient)" strokeWidth="10" strokeLinecap="round" />
         
         {/* 刻度线 */}
         {[-90, -60, -30, 0, 30, 60, 90].map((deg, i) => {
@@ -298,14 +306,10 @@ const GaugeIndicator = ({ signal, confidence }: { signal: string; confidence: nu
         
         {/* 指针 */}
         <g transform={`rotate(${angle}, 100, 100)`}>
-          <line
-            x1="100" y1="100" x2="100" y2="30"
-            stroke={color} strokeWidth="4" strokeLinecap="round"
-          />
+          <line x1="100" y1="100" x2="100" y2="30" stroke={color} strokeWidth="4" strokeLinecap="round" />
           <circle cx="100" cy="30" r="8" fill={color} />
         </g>
         
-        {/* 中心点 */}
         <circle cx="100" cy="100" r="8" fill={color} />
       </svg>
       
@@ -329,24 +333,36 @@ const IndicatorCard = ({
   label, 
   value, 
   status, 
-  color 
+  color,
+  showTrendArrow 
 }: { 
   label: string;       // 指标名称
   value: string;       // 指标值
   status?: string;     // 状态标签（如超买、金叉）
   color?: string;      // 文字颜色类名
+  showTrendArrow?: 'up' | 'down' | null; // 趋势箭头
 }) => (
   <div className="bg-light-50/50 rounded-xl p-3">
     <p className="text-xs text-light-400 mb-1">{label}</p>
     <div className="flex items-center gap-2">
+      {showTrendArrow === 'up' && (
+        <svg className="w-4 h-4 text-accent-green" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+        </svg>
+      )}
+      {showTrendArrow === 'down' && (
+        <svg className="w-4 h-4 text-accent-red" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
+        </svg>
+      )}
       <span className={`text-sm font-semibold ${color || 'text-light-800'}`}>{value}</span>
       {status && (
-        <span className={`text-xs px-2 py-0.5 rounded-full ${
-          status === '超买' ? 'bg-accent-red/10 text-accent-red' :
-          status === '超卖' ? 'bg-accent-green/10 text-accent-green' :
-          status === '金叉' ? 'bg-accent-green/10 text-accent-green' :
-          status === '死叉' ? 'bg-accent-red/10 text-accent-red' :
-          'bg-accent-yellow/10 text-accent-yellow'
+        <span className={`text-xs px-2.5 py-0.75 rounded-full font-medium ${
+          status === '超买' ? 'bg-accent-red/20 text-red-700' :
+          status === '超卖' ? 'bg-accent-green/20 text-green-700' :
+          status === '金叉' ? 'bg-accent-green/20 text-green-700' :
+          status === '死叉' ? 'bg-accent-red/20 text-red-700' :
+          'bg-accent-yellow/20 text-yellow-700'
         }`}>
           {status}
         </span>
@@ -431,6 +447,7 @@ export default function SignalCard({ data }: SignalCardProps) {
             <IndicatorCard 
               label="成交量变化" 
               value={data.indicators?.volume_change ? `${data.indicators.volume_change > 0 ? '+' : ''}${data.indicators.volume_change.toFixed(1)}%` : '--'}
+              showTrendArrow={data.indicators?.volume_change !== undefined ? (data.indicators.volume_change >= 0 ? 'up' : 'down') : null}
             />
           </div>
 

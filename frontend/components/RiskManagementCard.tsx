@@ -1,3 +1,4 @@
+import React from 'react';
 import { RiskManagement, SignalResponse } from '../services/api';
 
 interface RiskManagementCardProps {
@@ -36,12 +37,41 @@ const getSignalCopy = (signal: SignalResponse['signal']) => {
   return '观望交易计划';
 };
 
-const Metric = ({ label, value, accent }: { label: string; value: string; accent?: string }) => (
-  <div className="rounded-2xl border border-light-200/70 bg-white/70 p-4 shadow-sm">
-    <p className="text-xs font-medium text-light-400 mb-2">{label}</p>
-    <p className={`text-lg font-bold ${accent || 'text-light-800'}`}>{value}</p>
-  </div>
-);
+const Metric = ({ label, value, accent, showAlert }: { label: string; value: string; accent?: string; showAlert?: boolean }) => {
+  const [alertActive, setAlertActive] = React.useState(false);
+  
+  const handleAlertClick = () => {
+    setAlertActive(!alertActive);
+    // 这里可以添加实际的提醒设置逻辑
+    console.log(`Alert ${alertActive ? 'disabled' : 'enabled'} for ${label}: ${value}`);
+  };
+  
+  return (
+    <div className="relative rounded-2xl border border-light-200/70 bg-white/70 p-4 shadow-sm">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xs font-medium text-light-400 mb-2">{label}</p>
+          <p className={`text-lg font-bold ${accent || 'text-light-800'}`}>{value}</p>
+        </div>
+        {showAlert && (
+          <button
+            onClick={handleAlertClick}
+            className={`p-1.5 rounded-lg transition-all duration-200 ${
+              alertActive 
+                ? 'bg-accent-blue/10 text-accent-blue' 
+                : 'bg-light-100 text-light-400 hover:bg-light-200'
+            }`}
+            title={alertActive ? '关闭价格提醒' : '设置价格提醒'}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default function RiskManagementCard({ risk, signal }: RiskManagementCardProps) {
   const positionTone = getPositionTone(risk.positionSize);
@@ -83,8 +113,8 @@ export default function RiskManagementCard({ risk, signal }: RiskManagementCardP
 
         <div className="mt-6 grid grid-cols-2 gap-3">
           <Metric label="计划入场价" value={formatPrice(risk.entryPrice)} />
-          <Metric label="建议止损价" value={formatPrice(risk.stopLoss)} accent="text-accent-red" />
-          <Metric label="建议止盈价" value={formatPrice(risk.takeProfit)} accent="text-accent-green" />
+          <Metric label="建议止损价" value={formatPrice(risk.stopLoss)} accent="text-accent-red" showAlert />
+          <Metric label="建议止盈价" value={formatPrice(risk.takeProfit)} accent="text-accent-green" showAlert />
           <Metric label="风险收益比 R/R" value={risk.riskRewardRatio ? `1:${risk.riskRewardRatio.toFixed(2)}` : '--'} accent={rrTone} />
         </div>
 

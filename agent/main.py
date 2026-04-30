@@ -7,6 +7,7 @@ from typing import Optional, List, Dict
 from agent import run_agent, get_market_rankings
 from services.provider_factory import provider_factory
 from services.langchain_agent import get_crypto_agent
+from services.sentiment_service import sentiment_service
 from backtest import run_strategy_backtest
 import os
 
@@ -107,6 +108,24 @@ def health_check():
         服务状态
     """
     return {"status": "ok", "service": "OKX交易分析API", "version": "1.0.0"}
+
+
+@app.get("/api/v1/sentiment", summary="获取市场情绪数据")
+def get_sentiment(symbol: str = "BTC"):
+    """
+    获取市场情绪指标数据
+    
+    参数:
+        symbol: 加密货币代码，默认 BTC
+    
+    返回:
+        包含多空比、资金费率、恐慌贪婪指数的JSON对象
+    """
+    try:
+        data = sentiment_service.get_sentiment_data(symbol)
+        return {"success": True, "data": data}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 class ChatMessage(BaseModel):

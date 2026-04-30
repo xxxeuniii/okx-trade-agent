@@ -7,54 +7,102 @@
  * - 恐慌与贪婪指数 (Fear & Greed Index)
  */
 
-/**
- * 情绪数据接口定义
- */
 interface SentimentData {
-  longShortRatio: number;    // 多空人数比
-  fundingRate: number;       // 资金费率 (年化)
-  fearGreedIndex: number;    // 恐慌贪婪指数 (0-100)
-  fearGreedLabel: string;    // 恐慌贪婪状态标签
+  longShortRatio: number;     // 多空比
+  longAccountRatio: number;   // 多头账户占比
+  shortAccountRatio: number;  // 空头账户占比
+  fundingRate: number;        // 资金费率 (%)
+  fearGreedIndex: number;     // 恐慌贪婪指数 (0-100)
+  fearGreedLabel: string;     // 恐慌贪婪状态标签
+  symbol?: string;            // 币种代码
+  timestamp?: number;         // 时间戳
 }
 
-/**
- * 组件属性接口
- */
 interface SentimentCardProps {
   data: SentimentData;
 }
 
-/**
- * 根据恐慌贪婪指数获取状态颜色
- */
 const getFearGreedColor = (index: number): string => {
-  if (index <= 20) return '#96002c';    // 极度恐慌 - 深红
-  if (index <= 40) return '#c53030';    // 恐慌 - 红色
-  if (index <= 60) return '#d4a574';    // 中性 - 黄色
-  if (index <= 80) return '#38a169';    // 贪婪 - 绿色
-  return '#006432';                      // 极度贪婪 - 深绿
+  if (index <= 20) return '#96002c';
+  if (index <= 40) return '#c53030';
+  if (index <= 60) return '#d4a574';
+  if (index <= 80) return '#38a169';
+  return '#006432';
 };
 
-/**
- * 获取资金费率状态颜色
- */
 const getFundingRateColor = (rate: number): string => {
-  if (rate > 0.01) return '#c53030';    // 高正费率 - 红色
-  if (rate > 0) return '#e53e3e';       // 正费率 - 浅红
-  if (rate < -0.01) return '#38a169';   // 高负费率 - 绿色
-  if (rate < 0) return '#48bb78';       // 负费率 - 浅绿
-  return '#a0aec0';                      // 中性 - 灰色
+  if (rate > 0.01) return '#c53030';
+  if (rate > 0) return '#e53e3e';
+  if (rate < -0.01) return '#38a169';
+  if (rate < 0) return '#48bb78';
+  return '#a0aec0';
 };
 
 /**
- * 获取多空比状态颜色
+ * 双向进度条组件 - 多空比
  */
-const getLongShortColor = (ratio: number): string => {
-  if (ratio >= 2.5) return '#c53030';   // 极度看多 - 红色（可能过热）
-  if (ratio >= 1.5) return '#e53e3e';   // 看多 - 浅红
-  if (ratio <= 0.4) return '#38a169';   // 极度看空 - 绿色（可能超卖）
-  if (ratio <= 0.67) return '#48bb78';  // 看空 - 浅绿
-  return '#a0aec0';                      // 中性 - 灰色
+const LongShortBar = ({ longAccountRatio, shortAccountRatio }: { longAccountRatio: number; shortAccountRatio: number }) => {
+  const longPercent = Math.round(longAccountRatio * 100);
+  const shortPercent = Math.round(shortAccountRatio * 100);
+  const isLongDominant = longPercent > shortPercent;
+  
+  return (
+    <div className="bg-light-50/50 rounded-xl p-4">
+      <p className="text-xs text-light-400 mb-3">多空账户比</p>
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-6 rounded-lg overflow-hidden bg-light-200 flex">
+          {/* 空头部分 - 红色 */}
+          <div 
+            className="h-full bg-gradient-to-r from-accent-red/80 to-accent-red/40 transition-all duration-500"
+            style={{ width: `${shortPercent}%` }}
+          />
+          {/* 多头部分 - 绿色 */}
+          <div 
+            className="h-full bg-gradient-to-l from-accent-green/80 to-accent-green/40 transition-all duration-500"
+            style={{ width: `${longPercent}%` }}
+          />
+        </div>
+      </div>
+      <div className="flex justify-between mt-2 text-sm">
+        <span className="text-accent-red font-semibold">空头 {shortPercent}%</span>
+        <span className="text-accent-green font-semibold">多头 {longPercent}%</span>
+      </div>
+      {/* 优势指示标签 */}
+      <div className={`mt-2 px-3 py-1 rounded-full text-xs font-medium ${
+        isLongDominant 
+          ? 'bg-accent-green/10 text-accent-green' 
+          : 'bg-accent-red/10 text-accent-red'
+      }`}>
+        {isLongDominant ? `多头优势 (+${Math.abs(longPercent - shortPercent)}%)` : `空头优势 (+${Math.abs(shortPercent - longPercent)}%)`}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * 资金费率卡片
+ */
+const FundingRateCard = ({ rate }: { rate: number }) => {
+  const color = getFundingRateColor(rate);
+  const isPositive = rate > 0;
+  
+  return (
+    <div className="bg-light-50/50 rounded-xl p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <p className="text-xs text-light-400">资金费率</p>
+        <span className="text-xs px-2 py-0.5 bg-light-200 rounded-full text-light-500">年化</span>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <span className="text-xl font-bold" style={{ color }}>
+          {isPositive ? '+' : ''}{rate.toFixed(4)}%
+        </span>
+      </div>
+      {/* 费率说明 */}
+      <p className={`mt-2 text-xs ${isPositive ? 'text-accent-red' : 'text-accent-green'}`}>
+        {isPositive ? '↗ 持仓需支付费用' : '↘ 持仓可获得收益'}
+      </p>
+    </div>
+  );
 };
 
 /**
@@ -62,11 +110,11 @@ const getLongShortColor = (ratio: number): string => {
  */
 const FearGreedGauge = ({ value, label }: { value: number; label: string }) => {
   const color = getFearGreedColor(value);
-  const angle = ((value / 100) * 180) - 90;  // -90 到 +90 度
+  const angle = ((value / 100) * 180) - 90;
   
   return (
-    <div className="relative w-28 h-20">
-      <svg viewBox="0 0 120 60" className="w-full h-full">
+    <div className="flex flex-col items-center">
+      <svg viewBox="0 0 120 60" className="w-28 h-16">
         <defs>
           <linearGradient id="fgGradient" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#96002c" />
@@ -75,124 +123,150 @@ const FearGreedGauge = ({ value, label }: { value: number; label: string }) => {
           </linearGradient>
         </defs>
         
-        {/* 背景圆弧 */}
-        <path
-          d="M 5 55 A 55 55 0 0 1 115 55"
-          fill="none"
-          stroke="#e5e7eb"
-          strokeWidth="8"
-          strokeLinecap="round"
-        />
+        <path d="M 5 55 A 55 55 0 0 1 115 55" fill="none" stroke="#e5e7eb" strokeWidth="8" strokeLinecap="round" />
+        <path d="M 5 55 A 55 55 0 0 1 115 55" fill="none" stroke="url(#fgGradient)" strokeWidth="6" strokeLinecap="round" />
         
-        {/* 渐变圆弧 */}
-        <path
-          d="M 5 55 A 55 55 0 0 1 115 55"
-          fill="none"
-          stroke="url(#fgGradient)"
-          strokeWidth="6"
-          strokeLinecap="round"
-        />
-        
-        {/* 指针 */}
         <g transform={`rotate(${angle}, 60, 55)`}>
-          <line
-            x1="60" y1="55" x2="60" y2="15"
-            stroke={color} strokeWidth="3" strokeLinecap="round"
-          />
+          <line x1="60" y1="55" x2="60" y2="15" stroke={color} strokeWidth="3" strokeLinecap="round" />
           <circle cx="60" cy="15" r="5" fill={color} />
         </g>
         
-        {/* 中心点 */}
         <circle cx="60" cy="55" r="5" fill={color} />
       </svg>
       
-      <div className="absolute bottom-0 left-0 right-0 text-center">
-        <p className="text-lg font-bold" style={{ color }}>{value}</p>
-        <p className="text-xs text-light-400 truncate">{label}</p>
+      {/* 数值和标签放在仪表盘下方，避免被指针遮挡 */}
+      <div className="text-center mt-2">
+        <p className="text-xl font-bold" style={{ color }}>{value}</p>
+        <p className="text-xs text-light-400">{label}</p>
       </div>
     </div>
   );
 };
 
 /**
- * 数值指标卡片
+ * 分析结论标签组件
  */
-const MetricCard = ({ 
-  label, 
-  value, 
-  unit = '', 
-  color 
-}: { 
-  label: string; 
-  value: number; 
-  unit?: string;
-  color: string; 
-}) => {
+const AnalysisTag = ({ text, type }: { text: string; type: 'warning' | 'info' | 'success' }) => {
+  const styles = {
+    warning: 'bg-accent-red/10 text-accent-red border-accent-red/30',
+    info: 'bg-accent-blue/10 text-accent-blue border-accent-blue/30',
+    success: 'bg-accent-green/10 text-accent-green border-accent-green/30'
+  };
+  
+  const icons = {
+    warning: '⚠',
+    info: '💡',
+    success: '✅'
+  };
+  
   return (
-    <div className="bg-light-50/50 rounded-xl p-4">
-      <p className="text-xs text-light-400 mb-2">{label}</p>
-      <div className="flex items-baseline gap-1">
-        <span className="text-xl font-bold" style={{ color }}>
-          {typeof value === 'number' ? value.toFixed(4) : value}
-        </span>
-        <span className="text-xs text-light-400">{unit}</span>
-      </div>
-    </div>
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${styles[type]}`}>
+      <span>{icons[type]}</span>
+      <span>{text}</span>
+    </span>
   );
+};
+
+/**
+ * 获取分析结论
+ */
+const getAnalysisConclusions = (data: SentimentData): { text: string; type: 'warning' | 'info' | 'success' }[] => {
+  const conclusions: { text: string; type: 'warning' | 'info' | 'success' }[] = [];
+  
+  // 多空比分析
+  const longPercent = Math.round((data.longShortRatio / (1 + data.longShortRatio)) * 100);
+  if (longPercent >= 60) {
+    conclusions.push({ text: `多头占优(${longPercent}%)，警惕回调风险`, type: 'warning' });
+  } else if (longPercent <= 40) {
+    conclusions.push({ text: `空头占优(${100 - longPercent}%)，可能存在反弹机会`, type: 'success' });
+  }
+  
+  // 资金费率分析
+  if (data.fundingRate > 0.01) {
+    conclusions.push({ text: '资金费率偏高，多头持仓成本增加', type: 'warning' });
+  } else if (data.fundingRate < -0.01) {
+    conclusions.push({ text: '资金费率为负，持仓可获得收益', type: 'success' });
+  }
+  
+  // 恐慌贪婪指数分析
+  if (data.fearGreedIndex <= 20) {
+    conclusions.push({ text: '市场极度恐慌，或为买入机会', type: 'success' });
+  } else if (data.fearGreedIndex >= 80) {
+    conclusions.push({ text: '市场极度贪婪，注意风险控制', type: 'warning' });
+  }
+  
+  if (conclusions.length === 0) {
+    conclusions.push({ text: '市场情绪中性，建议观望', type: 'info' });
+  }
+  
+  return conclusions;
 };
 
 /**
  * 主组件
  */
 export default function SentimentCard({ data }: SentimentCardProps) {
+  const conclusions = getAnalysisConclusions(data);
+  
   return (
-    <div className="glass-card rounded-2xl overflow-hidden mb-6">
-      <div className="bg-gradient-to-br from-accent-blue/5 via-white to-accent-purple/5 p-8">
-        {/* 标题 */}
-        <div className="flex items-center gap-2 mb-6">
-          <div className="w-10 h-10 bg-light-100 rounded-xl flex items-center justify-center border border-light-200">
-            <svg className="w-5 h-5 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="glass-card rounded-xl overflow-hidden">
+      <div className="p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-8 h-8 bg-light-100 rounded-lg flex items-center justify-center">
+            <svg className="w-4 h-4 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
           </div>
           <div>
-            <h3 className="text-lg font-bold text-light-800">市场情绪指标</h3>
-            <p className="text-xs text-light-400">交易所持仓 & 市场情绪</p>
+            <h3 className="text-base font-bold text-light-800">市场情绪</h3>
+            <p className="text-xs text-light-400">持仓 & 情绪指数</p>
           </div>
         </div>
         
-        {/* 指标内容 */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          {/* 多空人数比 */}
-          <MetricCard
-            label="多空人数比"
-            value={data.longShortRatio}
-            color={getLongShortColor(data.longShortRatio)}
-          />
-          
-          {/* 资金费率 */}
-          <MetricCard
-            label="资金费率 (年化)"
-            value={data.fundingRate}
-            unit="%"
-            color={getFundingRateColor(data.fundingRate)}
-          />
-          
-          {/* 恐慌贪婪指数仪表盘 */}
-          <div className="lg:col-span-2 flex justify-center lg:justify-start">
-            <FearGreedGauge 
-              value={data.fearGreedIndex} 
-              label={data.fearGreedLabel} 
-            />
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="bg-light-50/50 rounded-lg p-3">
+            <p className="text-xs text-light-400 mb-2">多空比</p>
+            <div className="flex h-4 rounded-lg overflow-hidden bg-light-200">
+              <div className="bg-accent-red/60 transition-all" style={{ width: `${(data.shortAccountRatio || 0.5) * 100}%` }} />
+              <div className="bg-accent-green/60 transition-all" style={{ width: `${(data.longAccountRatio || 0.5) * 100}%` }} />
+            </div>
+            <p className="text-xs mt-1">{Math.round((data.longAccountRatio || 0.5) * 100)}%</p>
+          </div>
+          <div className="bg-light-50/50 rounded-lg p-3">
+            <p className="text-xs text-light-400 mb-2">资金费率</p>
+            <p className={`text-sm font-bold ${(data.fundingRate || 0) >= 0 ? 'text-accent-red' : 'text-accent-green'}`}>
+              {data.fundingRate >= 0 ? '+' : ''}{(data.fundingRate || 0).toFixed(4)}%
+            </p>
+            <p className="text-xs text-light-400">年化</p>
+          </div>
+          <div className="bg-light-50/50 rounded-lg p-3 flex flex-col items-center">
+            <p className="text-xs text-light-400 mb-1">恐慌贪婪</p>
+            <svg viewBox="0 0 80 40" className="w-16 h-8">
+              <defs>
+                <linearGradient id="fgGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#96002c" />
+                  <stop offset="50%" stopColor="#d4a574" />
+                  <stop offset="100%" stopColor="#006432" />
+                </linearGradient>
+              </defs>
+              <path d="M 3 35 A 37 37 0 0 1 77 35" fill="none" stroke="#e5e7eb" strokeWidth="4" />
+              <path d="M 3 35 A 37 37 0 0 1 77 35" fill="none" stroke="url(#fgGrad)" strokeWidth="3" />
+              <g transform={`rotate(${(data.fearGreedIndex / 100) * 180 - 90}, 40, 35)`}>
+                <line x1="40" y1="35" x2="40" y2="10" stroke="#d4a574" strokeWidth="2" />
+                <circle cx="40" cy="10" r="3" fill="#d4a574" />
+              </g>
+              <circle cx="40" cy="35" r="3" fill="#d4a574" />
+            </svg>
+            <p className="text-xs font-bold text-light-700">{data.fearGreedIndex}</p>
           </div>
         </div>
         
-        {/* 提示信息 */}
-        <div className="mt-6 pt-6 border-t border-light-200/50">
-          <div className="flex flex-wrap gap-4 text-xs text-light-400">
-            <span><span className="text-accent-red">多头占优</span> → 警惕回调风险</span>
-            <span><span className="text-accent-green">空头占优</span> → 可能反弹</span>
-            <span><span className="text-accent-green">负费率</span> → 持仓可获利息</span>
+        {/* 分析结论 */}
+        <div className="pt-3 border-t border-light-200/50">
+          <div className="flex flex-wrap gap-1.5">
+            {conclusions.map((conclusion, index) => (
+              <AnalysisTag key={index} text={conclusion.text} type={conclusion.type} />
+            ))}
           </div>
         </div>
       </div>
