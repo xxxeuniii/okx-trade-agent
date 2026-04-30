@@ -3,6 +3,7 @@
  * 
  * 在屏幕右下角显示一个聊天图标，点击弹出AI对话窗口
  * 用户可以问："为什么刚才建议止损在 $2,200？"
+ * 支持拖拽调整窗口大小
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -24,7 +25,12 @@ export default function FloatingAssistant() {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [dimensions, setDimensions] = useState({ width: 400, height: 500 });
+  const [isResizing, setIsResizing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const startPosRef = useRef({ x: 0, y: 0 });
+  const startDimRef = useRef({ width: 0, height: 0 });
 
   // 滚动到底部
   const scrollToBottom = useCallback(() => {
@@ -34,6 +40,42 @@ export default function FloatingAssistant() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
+
+  // 处理拖拽调整大小
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    startPosRef.current = { x: e.clientX, y: e.clientY };
+    startDimRef.current = { width: dimensions.width, height: dimensions.height };
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+
+      const deltaX = e.clientX - startPosRef.current.x;
+      const deltaY = e.clientY - startPosRef.current.y;
+
+      const newWidth = Math.min(Math.max(startDimRef.current.width + deltaX, 320), 600);
+      const newHeight = Math.min(Math.max(startDimRef.current.height + deltaY, 400), 700);
+
+      setDimensions({ width: newWidth, height: newHeight });
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   const handleSend = () => {
     if (!input.trim() || isLoading) return;
@@ -167,7 +209,19 @@ export default function FloatingAssistant() {
           />
           
           {/* 聊天面板 */}
-          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[500px]" style={{ zIndex: 1 }}>
+          <div 
+            ref={panelRef}
+            className={`relative bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col ${
+              isResizing ? 'cursor-se-resize' : ''
+            }`}
+            style={{ 
+              zIndex: 1,
+              width: dimensions.width,
+              height: dimensions.height,
+              maxWidth: '90vw',
+              maxHeight: '90vh'
+            }}
+          >
             {/* 头部 */}
             <div className="flex items-center justify-between px-6 py-4 bg-accent-blue">
               <div className="flex items-center gap-3">
@@ -274,6 +328,16 @@ export default function FloatingAssistant() {
                   </svg>
                 </button>
               </div>
+            </div>
+
+            {/* 调整大小手柄 */}
+            <div
+              className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize flex items-center justify-center bg-accent-blue/10 rounded-bl-lg"
+              onMouseDown={handleResizeStart}
+            >
+              <svg className="w-4 h-4 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+              </svg>
             </div>
           </div>
         </div>
