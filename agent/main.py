@@ -7,6 +7,7 @@ from typing import Optional, List, Dict
 from agent import run_agent, get_market_rankings
 from services.provider_factory import provider_factory
 from services.langchain_agent import get_crypto_agent
+from backtest import run_strategy_backtest
 import os
 
 # 创建FastAPI应用实例
@@ -124,6 +125,15 @@ class ChatQuery(BaseModel):
     chat_history: Optional[List[ChatMessage]] = None
 
 
+class BacktestQuery(BaseModel):
+    """
+    回测查询模型
+    """
+    symbol: str
+    timeframe: str
+    initialCapital: float
+
+
 @app.post("/api/v1/chat", summary="LangChain AI对话")
 def chat_with_agent(cq: ChatQuery):
     """
@@ -163,6 +173,26 @@ def clear_chat_memory():
         return {"success": True, "message": "对话记忆已清除"}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+@app.post("/api/v1/backtest", summary="策略回测")
+def backtest_strategy(bq: BacktestQuery):
+    """
+    运行交易策略回测
+    
+    请求体:
+        symbol: 币种代码
+        timeframe: 时间周期
+        initialCapital: 初始资金
+        
+    返回:
+        回测结果，包含收益率、胜率、最大回撤等指标
+    """
+    try:
+        result = run_strategy_backtest(bq.symbol, bq.timeframe, bq.initialCapital)
+        return result
+    except Exception as e:
+        return {"error": str(e), "success": False}
 
 
 if __name__ == "__main__":
