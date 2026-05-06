@@ -109,6 +109,48 @@ npm run dev
 
 前端将运行在 `http://localhost:3000`（或自动分配的其他端口）
 
+## Agent 后端服务
+
+### 核心功能
+
+Agent 服务是系统的核心后端组件，提供以下功能：
+
+- **实时行情数据获取** - 连接 OKX API 获取实时价格和 K 线数据
+- **技术指标计算** - 计算 RSI、MACD、布林带、均线等指标
+- **AI 交易信号生成** - 基于大模型的智能买卖建议
+- **风险控制方案** - 自动计算止损、止盈、仓位建议
+- **多周期分析** - 支持 1秒到3月等多种时间周期
+- **流式对话服务** - AI 助手实时问答能力
+
+### 架构设计
+
+```
+agent/
+├── services/             # 核心服务层
+│   ├── llm_service.py    # 大模型服务（LangChain 封装）
+│   ├── market_provider.py # 市场数据抽象层
+│   ├── okx_service.py    # OKX API 服务
+│   ├── websocket_provider.py # WebSocket 实时数据
+│   ├── sentiment_service.py # 市场情绪数据
+│   ├── langchain_agent.py # LangChain Agent
+│   └── provider_factory.py # 数据提供者工厂
+├── tools/                # 工具函数
+│   └── okx_price_tool.py # OKX 价格查询工具
+├── agent.py              # 核心业务逻辑
+├── main.py               # FastAPI 入口
+└── backtest.py           # 策略回测模块
+```
+
+### 数据提供者模式
+
+系统采用工厂模式支持多种数据获取方式：
+
+| 提供者类型 | 说明 | 适用场景 |
+|------------|------|----------|
+| `http` | 通过 REST API 获取数据 | 稳定可靠，适合定时任务 |
+| `ws` | 通过 WebSocket 实时推送 | 实时行情，低延迟 |
+| `mcp` | 通过 MCP 协议获取数据 | 企业级安全连接 |
+
 ### API 接口
 
 #### 获取加密货币分析
@@ -140,6 +182,47 @@ npm run dev
   }
 }
 ```
+
+#### 流式 AI 对话
+
+**POST** `/api/v1/chat/stream`
+
+请求体：
+```json
+{
+  "query": "为什么建议止损在 $2,200？",
+  "chat_history": []
+}
+```
+
+返回：SSE 流式响应，逐步返回 AI 回答
+
+#### 获取市场情绪数据
+
+**GET** `/api/v1/sentiment?symbol=BTC`
+
+返回包含恐慌贪婪指数、资金费率、多空比等数据
+
+#### 获取多周期趋势分析
+
+**GET** `/api/v1/multi-timeframe?symbol=BTC`
+
+返回 1H、4H、1D 三个周期的趋势分析
+
+#### 策略回测
+
+**POST** `/api/v1/backtest`
+
+请求体：
+```json
+{
+  "symbol": "BTC",
+  "timeframe": "1H",
+  "initialCapital": 10000
+}
+```
+
+返回回测结果，包括收益率、胜率、最大回撤等指标
 
 ### 支持的时间周期
 
