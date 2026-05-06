@@ -140,10 +140,43 @@ def generate_signal(price_data: dict) -> dict:
 def calculate_risk_management(price_data: dict, signal_data: dict) -> dict:
     try:
         llm = get_llm_service()
-        return llm.generate_risk_management(price_data, signal_data)
+        result = llm.generate_risk_management(price_data, signal_data)
+        if result:
+            return result
     except Exception as e:
         print(f"AI风控生成失败: {e}")
-        return None
+    
+    # 降级方案：基于信号和价格生成默认风险控制
+    price = price_data.get("price", 0)
+    signal = signal_data.get("signal", "NEUTRAL")
+    confidence = signal_data.get("confidence", 0.5)
+    
+    # 计算止损和止盈
+    stop_loss = price * 0.98  # 默认2%止损
+    take_profit = price * 1.02  # 默认2%止盈
+    
+    if signal == "BUY":
+        stop_loss = price * (1 - 0.01 * (1 - confidence + 0.3))
+        take_profit = price * (1 + 0.02 * (confidence + 0.3))
+    elif signal == "SELL":
+        stop_loss = price * (1 + 0.01 * (1 - confidence + 0.3))
+        take_profit = price * (1 - 0.02 * (confidence + 0.3))
+    
+    return {
+        "entryPrice": round(price, 2),
+        "stopLoss": round(stop_loss, 2),
+        "takeProfit": round(take_profit, 2),
+        "riskRewardRatio": round(abs(take_profit - price) / abs(stop_loss - price), 2) if abs(stop_loss - price) > 0 else 1.0,
+        "positionSize": "观望" if confidence < 0.5 else "轻仓" if confidence < 0.7 else "中仓",
+        "maxLossPercent": round(abs(stop_loss - price) / price * 100, 2),
+        "volatilityLevel": "中",
+        "riskScore": int((1 - confidence) * 50 + 30),
+        "notes": [
+            "AI风控服务暂不可用，使用默认参数",
+            "建议手动确认风险参数",
+            "关注市场波动变化"
+        ]
+    }
 
 
 def _generate_signal_fallback(price_data: dict) -> dict:
